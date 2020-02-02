@@ -1,4 +1,4 @@
-use crate::ble::advertisement::RawAdvertisement;
+use crate::advertisement::RawAdvertisement;
 pub trait ScannerSink {
     fn consume_advertisement(&self, advertisement: &RawAdvertisement);
 }

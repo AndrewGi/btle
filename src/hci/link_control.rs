@@ -1,4 +1,4 @@
-use crate::ble::hci::{Opcode, OCF, OGF};
+use crate::hci::{Opcode, OCF, OGF};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(u16)]

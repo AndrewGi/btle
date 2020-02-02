@@ -6,7 +6,7 @@ pub mod remote;
 #[cfg(all(unix, feature = "std"))]
 pub mod socket;
 pub mod stream;
-use crate::serializable::bytes::ToFromBytesEndian;
+use crate::bytes::ToFromBytesEndian;
 use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]

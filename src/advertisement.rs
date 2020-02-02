@@ -1,5 +1,5 @@
-use crate::ble::advertisement::AdStructure::Unknown;
-use crate::ble::RSSI;
+use crate::advertisement::AdStructure::Unknown;
+use crate::RSSI;
 use core::convert::TryFrom;
 use core::mem;
 

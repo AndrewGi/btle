@@ -1,4 +1,4 @@
-use crate::ble::hci::{Command, HCICommandError, HCIConversionError, Opcode, OCF, OGF};
+use crate::hci::{Command, HCICommandError, HCIConversionError, Opcode, OCF, OGF};
 use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
