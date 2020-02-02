@@ -1,9 +1,12 @@
 [package]
-name = "ble"
+name = "btle"
+description = "Lightweight Bluetooth Low Energy Drivers. WIP and not in a fully working state."
 version = "0.1.0"
+license = "GPL-3.0-only"
+readme = "README.md"
 authors = ["AndrewGi <andrew@gilbrough.com>"]
 edition = "2018"
-
+repository = "https://github.com/AndrewGi/btle/tree/master"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
