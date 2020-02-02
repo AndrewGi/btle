@@ -1,4 +1,4 @@
-use crate::hci::{Command, HCICommandError, HCIConversionError, Opcode, OCF, OGF};
+use crate::hci::{Command, HCIConversionError, HCIPackError, Opcode, OCF, OGF};
 use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -89,7 +89,46 @@ impl From<LEControllerOpcode> for Opcode {
         Opcode(OGF::LEController, opcode.into())
     }
 }
+pub enum LEMetaEventCode {
+    ConnectionComplete = 0x01,
+    AdvertisingReport = 0x02,
+    ConnectionUpdateComplete = 0x03,
+    ReadRemoteFeatures = 0x04,
+    LongTermKeyRequest = 0x05,
+    RemoteConnectionParametersRequest = 0x06,
+    DataLengthChange = 0x07,
+    ReadLocalP256PublicKeyComplete = 0x08,
+    GenerateDHKeyComplete = 0x09,
+    EnhancedConnectionComplete = 0x0A,
+    DirectedAdvertisingReport = 0x0B,
+    PHYUpdateCompleteEvent = 0x0C,
+    ExtendedAdvertisingReport = 0x0D,
+    PeriodicAdvertisingSyncEstablished = 0xE,
+    PeriodicAdvertisingReport = 0x0F,
+    PeriodicAdvertisingSyncLost = 0x10,
+    ScanTimeout = 0x11,
+    AdvertisingSetTerminated = 0x12,
+    ScanRequestReceived = 0x13,
+    ChannelSelectionAlgorithm = 0x14,
+    ConnectionlessIQReport = 0x15,
+    ConnectionIQReport = 0x16,
+    CTERequestFailed = 0x17,
+    PeriodicAdvertisingSyncTransferReceived = 0x18,
+    CISEstablished = 0x19,
+    CISRequest = 0x1A,
+    CreateBIGComplete = 0x1B,
+    TerminateBIGComplete = 0x1C,
+    BIGSyncEstablished = 0x1D,
+    BIGSyncLost = 0x1E,
+    RequestPeerSCAComplete = 0x1F,
+    PathLossThreshold = 0x20,
+    TransmitPowerReporting = 0x21,
+    BIGInfoAdvertisingReport = 0x22,
+}
 
+pub trait LEMetaEvent {
+    const CODE: LEMetaEventCode;
+}
 pub struct SetScanEnable {
     pub is_enabled: bool,
     pub filter_duplicates: bool,
@@ -113,9 +152,9 @@ impl Command for SetAdvertisingData {
         usize::from(self.len) + 1
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCICommandError> {
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
         if buf.len() != self.byte_len() {
-            Err(HCICommandError::BadLength)
+            Err(HCIPackError::BadLength)
         } else {
             buf[0] = self.len;
             let l = usize::from(self.len);
@@ -124,7 +163,7 @@ impl Command for SetAdvertisingData {
         }
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCICommandError>
+    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized,
     {

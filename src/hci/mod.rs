@@ -1,3 +1,4 @@
+pub mod event;
 /// HCI Layer is Little Endian.
 pub mod le;
 pub mod link_control;
@@ -12,6 +13,8 @@ use core::convert::{TryFrom, TryInto};
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct HCIVersionError(());
 
+/// Bluetooth Version reported by HCI Controller according to HCISpec. More versions may be added in
+/// the future once they are released.
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum Version {
@@ -320,7 +323,9 @@ impl TryFrom<u8> for EventCode {
         }
     }
 }
-
+pub const EVENT_MAX_LEN: usize = 255;
+pub const COMMAND_MAX_LEN: usize = 255;
+pub const EVENT_CODE_LEN: usize = 1;
 /// 6 bit OGF. (OpCode Ground Field)
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(u8)]
@@ -388,24 +393,30 @@ impl Opcode {
     pub const fn byte_len() -> usize {
         OPCODE_LEN
     }
-    pub fn pack(&self, buf: &mut [u8]) -> Result<(), HCICommandError> {
+    pub fn pack(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
         if buf.len() != OPCODE_LEN {
-            Err(HCICommandError::BadLength)
+            Err(HCIPackError::BadLength)
         } else {
             buf[..2].copy_from_slice(&u16::from(*self).to_bytes_le());
             Ok(())
         }
     }
-    pub fn unpack(buf: &[u8]) -> Result<Opcode, HCICommandError> {
+    pub fn unpack(buf: &[u8]) -> Result<Opcode, HCIPackError> {
         if buf.len() != OPCODE_LEN {
-            Err(HCICommandError::BadLength)
+            Err(HCIPackError::BadLength)
         } else {
             Ok(u16::from_bytes_le(&buf)
                 .expect("length checked above")
                 .try_into()
                 .ok()
-                .ok_or(HCICommandError::BadBytes)?)
+                .ok_or(HCIPackError::BadBytes)?)
         }
+    }
+    pub const fn nop() -> Opcode {
+        Opcode(OGF::NOP, OCF(0))
+    }
+    pub fn is_nop(&self) -> bool {
+        self.0 == OGF::NOP
     }
 }
 impl From<Opcode> for u16 {
@@ -422,7 +433,6 @@ impl TryFrom<u16> for Opcode {
         Ok(Opcode(ogf, ocf))
     }
 }
-const MAX_PARAMETERS_LEN: usize = 0xFF;
 pub struct CommandPacket<Storage: AsRef<[u8]>> {
     opcode: Opcode,
     parameters: Storage,
@@ -432,27 +442,47 @@ pub struct EventPacket<Storage: AsRef<[u8]>> {
     event_opcode: EventCode,
     parameters: Storage,
 }
-pub enum HCICommandError {
+pub enum HCIPackError {
     BadLength,
     SmallBuffer,
     BadBytes,
 }
 pub trait Command {
+    type Event;
     fn opcode() -> Opcode;
     fn byte_len(&self) -> usize;
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCICommandError>;
-    fn pack_full(&self, buf: &mut [u8]) -> Result<(), HCICommandError> {
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
+    fn pack_full(&self, buf: &mut [u8]) -> Result<usize, HCIPackError> {
         if buf.len() != self.byte_len() + OPCODE_LEN + 1 {
-            Err(HCICommandError::BadLength)
+            Err(HCIPackError::BadLength)
         } else {
             self.pack_into(&mut buf[3..])?;
-            Self::opcode().pack(&mut buf[..OPCODE_LEN])?;
+            Self::OPCODE.pack(&mut buf[..OPCODE_LEN])?;
             buf[2] =
                 u8::try_from(self.byte_len()).expect("commands can only have 0xFF parameter bytes");
-            Ok(())
+            Ok(self.byte_len() + OPCODE_LEN)
         }
     }
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCICommandError>
+    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    where
+        Self: Sized;
+}
+pub trait Event {
+    const CODE: EventCode;
+    fn byte_len(&self) -> usize;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
+    fn pack_full(&self, buf: &mut [u8]) -> Result<usize, HCIPackError> {
+        if buf.len() != self.byte_len() + EVENT_CODE_LEN + 1 {
+            Err(HCIPackError::BadLength)
+        } else {
+            self.pack_into(&mut buf[2..])?;
+            buf[0] = Self::CODE.into();
+            buf[1] =
+                u8::try_from(self.byte_len()).expect("events can only have 0xFF parameter bytes");
+            Ok(self.byte_len() + EVENT_CODE_LEN + 1)
+        }
+    }
+    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized;
 }

@@ -1,4 +1,4 @@
-use crate::hci::{Command, ErrorCode, EventPacket, HCICommandError, HCIConversionError};
+use crate::hci::{Command, ErrorCode, EventPacket, HCIConversionError, HCIPackError};
 use core::convert::TryFrom;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
@@ -35,7 +35,7 @@ impl TryFrom<u8> for PacketType {
     }
 }
 pub enum StreamError {
-    CommandError(HCICommandError),
+    CommandError(HCIPackError),
     IOError,
     HCIError(ErrorCode),
 }
@@ -56,8 +56,8 @@ pub trait Stream<Sink: StreamSink> {
 #[cfg(std)]
 pub mod byte_stream {
     use super::{Stream, StreamSink};
-    use crate::ble::hci::stream::StreamError;
-    use crate::ble::hci::Command;
+    use crate::hci::stream::StreamError;
+    use crate::hci::Command;
     use alloc::sync::Arc;
     use alloc::vec::Vec;
     use core::ops::Deref;
@@ -112,16 +112,27 @@ pub mod byte_stream {
             // OGF + OCF + LEN = 3 extra bytes
             let mut buf = [0_u8; 0xFF + 3];
             let l = command.byte_len();
-            command
-                .pack_full(&mut buf[..l + 3])
+            let amount = command
+                .pack_full(&mut buf[..])
                 .map_err(StreamError::CommandError)?;
             self.stream
-                .write(&buf[..l + 3])
+                .write(&buf[..amount])
                 .ok()
                 .ok_or(StreamError::IOError)?;
             self.stream.flush();
             // TODO: Get Response
             Ok(())
         }
+    }
+}
+#[cfg(feature = "async")]
+pub mod async_stream {
+    use super::Command;
+    use tokio::io::{AsyncRead, AsyncWrite};
+    pub struct AsyncWriter<Writer: AsyncWrite>(Writer);
+
+    pub trait AsyncStream {
+        /// Send a HCI Command to the Controller. Responses will be sent to the sink.
+        fn send_command<Cmd: Command>(&mut self, command: &Cmd) -> Result<(), StreamError>;
     }
 }
