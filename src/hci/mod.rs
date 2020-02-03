@@ -442,13 +442,53 @@ pub struct EventPacket<Storage: AsRef<[u8]>> {
     event_opcode: EventCode,
     parameters: Storage,
 }
+
 pub enum HCIPackError {
     BadLength,
     SmallBuffer,
     BadBytes,
 }
+pub trait ReturnParameters {
+    fn byte_len(&self) -> usize;
+    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    where
+        Self: Sized;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
+}
+pub struct StatusReturn {
+    pub status: ErrorCode,
+}
+impl StatusReturn {
+    pub const fn byte_len() -> usize {
+        1
+    }
+}
+impl ReturnParameters for StatusReturn {
+    fn byte_len(&self) -> usize {
+        Self::byte_len()
+    }
+
+    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError> {
+        if buf.len() != Self::byte_len() {
+            Err(HCIPackError::BadLength)
+        } else {
+            Ok(Self {
+                status: ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::BadBytes)?,
+            })
+        }
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
+        if buf.len() != Self::byte_len() {
+            Err(HCIPackError::BadLength)
+        } else {
+            buf[0] = self.status.into();
+            Ok(())
+        }
+    }
+}
 pub trait Command {
-    type Event;
+    type Return: ReturnParameters = StatusReturn;
     fn opcode() -> Opcode;
     fn byte_len(&self) -> usize;
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;

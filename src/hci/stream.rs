@@ -39,100 +39,24 @@ pub enum StreamError {
     IOError,
     HCIError(ErrorCode),
 }
+/*
 /// HCI Stream Sink that consumes any HCI Events or Status.
 pub trait StreamSink {
     fn consume_event(&self, event: EventPacket<&[u8]>);
 }
 /// Generic HCI Stream. Abstracted to HCI Command/Event Packets. If you only have access to a
 /// HCI Byte Stream, see `byte_stream::ByteStream` instead.
-pub trait Stream<Sink: StreamSink> {
-    /// Take a reader sink and start any reader tasks/threads
-    fn take_sink(&mut self, sink: Sink);
+pub trait WriteStream {
     /// Send a HCI Command to the Controller. Responses will be sent to the sink.
-    fn send_command<Cmd: Command>(&mut self, command: &Cmd) -> Result<(), StreamError>;
+    fn send_command<Cmd: Command>(&mut self, command: &Cmd) -> Result<Cmd: , StreamError>;
 }
-/// Optionally ByteStream abstraction but depends on `std` for `std::io::Write`, `std::io::read`
-/// and `std::thread::spawn`.
-#[cfg(std)]
-pub mod byte_stream {
-    use super::{Stream, StreamSink};
-    use crate::hci::stream::StreamError;
-    use crate::hci::Command;
-    use alloc::sync::Arc;
-    use alloc::vec::Vec;
-    use core::ops::Deref;
-    use std::io::{Read, Write};
+*/
 
-    /// Generic HCI Byte Stream according to HCI Spec. Usually used with [`socket::HCISocket`] but
-    /// could also be used with a UART driver, TLS socket, etc.
-    pub struct ByteStream<Sink: StreamSink + Send, S: Write + Read + Clone + Send> {
-        stream: S,
-    }
-    impl<Sink: StreamSink + Sen, S: Write + Read + Clone + Send> ByteStream<Sink, S> {
-        /// Wraps a stream with support for [`stream::Stream`]. This is not free because a thread
-        /// is spawned when the sink is taken.
-        pub fn new(stream: S) -> Self {
-            Self { stream }
-        }
-        fn start_read_thread(&self, sink: Sink) {
-            let mut reader = self.stream.clone();
-            std::thread::spawn(move || {
-                let mut buf = Vec::new();
-                let mut reader_buf = [0_u8; 512];
-                loop {
-                    let amount = match reader.read(&mut reader_buf[..]) {
-                        Ok(amount) => {
-                            if amount != 0 {
-                                buf.extend_from_slice(&reader_buf[..amount]);
-                            } else {
-                                continue;
-                            }
-                            amount
-                        }
-                        Err(_) => {
-                            // Reader err, close the stream
-                            return;
-                        }
-                    };
-                    if amount == reader_buf.len() {
-                        // Still more left to read in the buffer
-                        continue;
-                    }
-                    todo!("process event/status")
-                }
-            });
-        }
-    }
-    impl<Sink: StreamSink, S: Write + Read> Stream<Sink> for ByteStream<Sink, S> {
-        fn take_sink(&mut self, sink: Sink) {
-            self.start_read_thread(sink)
-        }
-
-        fn send_command<Cmd: Command>(&mut self, command: &Cmd) -> Result<(), StreamError> {
-            // OGF + OCF + LEN = 3 extra bytes
-            let mut buf = [0_u8; 0xFF + 3];
-            let l = command.byte_len();
-            let amount = command
-                .pack_full(&mut buf[..])
-                .map_err(StreamError::CommandError)?;
-            self.stream
-                .write(&buf[..amount])
-                .ok()
-                .ok_or(StreamError::IOError)?;
-            self.stream.flush();
-            // TODO: Get Response
-            Ok(())
-        }
-    }
+pub trait HCIWriter {
+    fn send_command<Fut, Cmd: Command>(&mut self, command: Cmd) -> Fut
+    where
+        Fut: core::future::Future<Output = Result<Cmd::Return, StreamError>>;
 }
-#[cfg(feature = "async")]
-pub mod async_stream {
-    use super::Command;
-    use tokio::io::{AsyncRead, AsyncWrite};
-    pub struct AsyncWriter<Writer: AsyncWrite>(Writer);
-
-    pub trait AsyncStream {
-        /// Send a HCI Command to the Controller. Responses will be sent to the sink.
-        fn send_command<Cmd: Command>(&mut self, command: &Cmd) -> Result<(), StreamError>;
-    }
+pub trait HCIReader {
+    fn read_event<Fut>(&mut self) -> Fut where Fut: core::future::Future<Output=Result<EventPacket<Box<[u8]>>, StreamError>>
 }
