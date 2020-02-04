@@ -442,7 +442,14 @@ pub struct EventPacket<Storage: AsRef<[u8]>> {
     event_opcode: EventCode,
     parameters: Storage,
 }
-
+impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
+    pub fn new(opcode: EventCode, parameters: Storage) -> Self {
+        Self {
+            event_opcode: opcode,
+            parameters,
+        }
+    }
+}
 pub enum HCIPackError {
     BadLength,
     SmallBuffer,

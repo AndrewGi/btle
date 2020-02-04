@@ -1,8 +1,16 @@
 //! Generic BLE driver targeting mostly Bluetooth Advertisements. Implements the HCI layer.
+#![no_std]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+
 pub mod adapter;
 pub mod advertisement;
 pub mod bytes;
 pub mod gap;
+#[cfg(feature = "hci")]
 pub mod hci;
 pub mod manager;
 pub mod uri;

@@ -284,7 +284,7 @@ impl<'a> Iterator for AdStructureIterator<'a> {
 }
 #[cfg(test)]
 mod tests {
-    use crate::ble::advertisement::AdType;
+    use crate::advertisement::AdType;
     use core::convert::TryFrom;
 
     #[test]

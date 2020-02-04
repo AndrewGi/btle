@@ -11,10 +11,12 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 
 [features]
 default = ["bluez_async"]
-bluez = ["nix", "libc"]
-bluez_async = ["bluez", "tokio/uds"]
+bluez = ["nix", "libc", "hci"]
+bluez_async = ["bluez", "async", "tokio/uds"]
+async = ["tokio"]
+hci = []
+std = []
 [dependencies]
-futures = "0.3.1"
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2.66", optional = true}
 tokio = {version = "0.2.11", optional = true}

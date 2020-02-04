@@ -1,4 +1,5 @@
 use crate::hci::{Command, ErrorCode, EventPacket, HCIConversionError, HCIPackError};
+use alloc::boxed::Box;
 use core::convert::TryFrom;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
@@ -36,6 +37,7 @@ impl TryFrom<u8> for PacketType {
 }
 pub enum StreamError {
     CommandError(HCIPackError),
+    BadOpcode,
     IOError,
     HCIError(ErrorCode),
 }
@@ -62,20 +64,80 @@ pub trait HCIReader {
     where
         Fut: core::future::Future<Output = Result<EventPacket<Box<[u8]>>, StreamError>>;
 }
-#[cfg(std)]
+#[cfg(feature = "std")]
 pub mod byte {
     use crate::hci::stream::{HCIReader, StreamError};
-    use crate::hci::EventPacket;
-    use futures::AsyncRead;
+    use crate::hci::{EventCode, EventPacket, HCIConversionError};
+    use alloc::boxed::Box;
+    use alloc::vec::Vec;
+    use core::convert::TryFrom;
+    use futures::task::Context;
+    use futures::{AsyncRead, Stream};
+    use tokio::macros::support::{Pin, Poll};
 
-    pub struct HCIByteReader<R: AsyncRead>(R);
-    impl<R: AsyncRead> HCIReader for HCIByteReader<R> {
-        async fn read_event<Fut>(&mut self) -> Result<EventPacket<Box<[u8]>>, StreamError> {
-            let mut code_len_buf = [0_u8; 3];
-            let mut pos = 0;
-            while pos < code_len_buf.len() {
-                let amount = self.0.poll_read(&mut code_len_buf[pos..]).await;
+    const EVENT_HEADER_LEN: usize = 2;
+
+    pub struct HCIByteReader<R: AsyncRead> {
+        reader: R,
+        pos: usize,
+        header_buf: [u8; EVENT_HEADER_LEN],
+        parameters: Option<Box<[u8]>>,
+    }
+
+    impl<R: AsyncRead> futures::Stream for HCIByteReader<R> {
+        type Item = Result<EventPacket<Box<[u8]>>, StreamError>;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            while self.pos < EVENT_HEADER_LEN {
+                let amount = self
+                    .reader
+                    .poll_read(cx, &mut self.header_buf[self.pos..])
+                    .map_err(|_| StreamError::IOError)
+                    .map(Option::Some)?;
+                if amount == 0 {
+                    return Poll::Ready(None);
+                }
+                self.pos += amount;
             }
+
+            let opcode = match EventCode::try_from(self.header_buf[0]) {
+                Ok(opcode) => opcode,
+                Err(_) => return Poll::Ready(Some(Err(StreamError::BadOpcode))),
+            };
+            let len = usize::from(self.header_buf[1]);
+            let make_buf = || {
+                let mut buf = Vec::with_capacity(len);
+                buf.resize(len, 0u8);
+                buf.into_boxed_slice()
+            };
+            let mut buf = {
+                if let Some(buf) = &mut self.parameters {
+                    buf.as_mut()
+                } else {
+                    self.parameters = Some(make_buf());
+                    self.parameters
+                        .as_mut()
+                        .expect("just created buffer with `make_buf()`")
+                        .as_mut()
+                }
+            };
+            while self.pos < len {
+                let amount = self
+                    .reader
+                    .poll_read(cx, &mut buf[self.pos..])
+                    .map_err(|_| StreamError::IOError)
+                    .map(Option::Some)?;
+                if amount == 0 {
+                    return Poll::Ready(None);
+                }
+                self.pos += amount;
+            }
+            Poll::Ready(Some(Ok(EventPacket::new(
+                opcode,
+                self.parameters
+                    .take()
+                    .expect("buffer just filled by poll_read"),
+            ))))
         }
     }
 }

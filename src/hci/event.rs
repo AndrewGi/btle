@@ -1,5 +1,5 @@
 use crate::hci::{ErrorCode, Event, EventCode, HCIPackError, Opcode, OPCODE_LEN};
-use std::convert::TryFrom;
+use core::convert::TryFrom;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct CommandComplete {
