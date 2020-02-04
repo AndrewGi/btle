@@ -71,29 +71,37 @@ pub mod byte {
     use alloc::boxed::Box;
     use alloc::vec::Vec;
     use core::convert::TryFrom;
+    use core::pin::Pin;
+    use core::task::Poll;
+
+    use futures::io::Error;
     use futures::task::Context;
     use futures::{AsyncRead, Stream};
-    use tokio::macros::support::{Pin, Poll};
 
     const EVENT_HEADER_LEN: usize = 2;
 
-    pub struct HCIByteReader<R: AsyncRead> {
-        reader: R,
+    pub struct HCIByteReader<'r, R: AsyncRead + Unpin> {
+        reader: &'r mut R,
         pos: usize,
         header_buf: [u8; EVENT_HEADER_LEN],
         parameters: Option<Box<[u8]>>,
     }
 
-    impl<R: AsyncRead> futures::Stream for HCIByteReader<R> {
+    impl<'r, R: AsyncRead + Unpin> Stream for HCIByteReader<'r, R> {
         type Item = Result<EventPacket<Box<[u8]>>, StreamError>;
 
-        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             while self.pos < EVENT_HEADER_LEN {
-                let amount = self
-                    .reader
-                    .poll_read(cx, &mut self.header_buf[self.pos..])
-                    .map_err(|_| StreamError::IOError)
-                    .map(Option::Some)?;
+                let pos = self.pos;
+                let me = &mut *self;
+                let amount =
+                    match Pin::new(&mut *me.reader).poll_read(cx, &mut me.header_buf[pos..]) {
+                        Poll::Ready(r) => match r {
+                            Ok(a) => a,
+                            Err(_) => return Poll::Ready(Some(Err(StreamError::IOError))),
+                        },
+                        Poll::Pending => return Poll::Pending,
+                    };
                 if amount == 0 {
                     return Poll::Ready(None);
                 }
@@ -121,12 +129,17 @@ pub mod byte {
                         .as_mut()
                 }
             };
-            while self.pos < len {
-                let amount = self
-                    .reader
-                    .poll_read(cx, &mut buf[self.pos..])
-                    .map_err(|_| StreamError::IOError)
-                    .map(Option::Some)?;
+            while self.pos < (len + EVENT_HEADER_LEN) {
+                let pos = self.pos;
+                let me = &mut *self;
+                let amount =
+                    match Pin::new(&mut *me.reader).poll_read(cx, &mut me.header_buf[pos..]) {
+                        Poll::Ready(r) => match r {
+                            Ok(a) => a,
+                            Err(_) => return Poll::Ready(Some(Err(StreamError::IOError))),
+                        },
+                        Poll::Pending => return Poll::Pending,
+                    };
                 if amount == 0 {
                     return Poll::Ready(None);
                 }

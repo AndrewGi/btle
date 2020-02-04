@@ -19,11 +19,10 @@ impl Client {
         Self(stream)
     }
 }
-pub mod server {
-    use super::socket;
+/*
     use std::{io, net};
     pub struct Server {
         tcp: net::TcpStream,
         hci: socket::HCISocket,
     }
-}
+*/
