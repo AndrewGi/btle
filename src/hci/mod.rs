@@ -488,7 +488,7 @@ impl ReturnParameters for StatusReturn {
     }
 }
 pub trait Command {
-    type Return: ReturnParameters = StatusReturn;
+    type Return: ReturnParameters;
     fn opcode() -> Opcode;
     fn byte_len(&self) -> usize;
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
@@ -497,7 +497,7 @@ pub trait Command {
             Err(HCIPackError::BadLength)
         } else {
             self.pack_into(&mut buf[3..])?;
-            Self::OPCODE.pack(&mut buf[..OPCODE_LEN])?;
+            Self::opcode().pack(&mut buf[..OPCODE_LEN])?;
             buf[2] =
                 u8::try_from(self.byte_len()).expect("commands can only have 0xFF parameter bytes");
             Ok(self.byte_len() + OPCODE_LEN)

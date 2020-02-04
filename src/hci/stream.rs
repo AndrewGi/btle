@@ -58,5 +58,24 @@ pub trait HCIWriter {
         Fut: core::future::Future<Output = Result<Cmd::Return, StreamError>>;
 }
 pub trait HCIReader {
-    fn read_event<Fut>(&mut self) -> Fut where Fut: core::future::Future<Output=Result<EventPacket<Box<[u8]>>, StreamError>>
+    fn read_event<Fut>(&mut self) -> Fut
+    where
+        Fut: core::future::Future<Output = Result<EventPacket<Box<[u8]>>, StreamError>>;
+}
+#[cfg(std)]
+pub mod byte {
+    use crate::hci::stream::{HCIReader, StreamError};
+    use crate::hci::EventPacket;
+    use futures::AsyncRead;
+
+    pub struct HCIByteReader<R: AsyncRead>(R);
+    impl<R: AsyncRead> HCIReader for HCIByteReader<R> {
+        async fn read_event<Fut>(&mut self) -> Result<EventPacket<Box<[u8]>>, StreamError> {
+            let mut code_len_buf = [0_u8; 3];
+            let mut pos = 0;
+            while pos < code_len_buf.len() {
+                let amount = self.0.poll_read(&mut code_len_buf[pos..]).await;
+            }
+        }
+    }
 }

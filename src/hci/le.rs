@@ -1,4 +1,4 @@
-use crate::hci::{Command, HCIConversionError, HCIPackError, Opcode, OCF, OGF};
+use crate::hci::{Command, HCIConversionError, HCIPackError, Opcode, StatusReturn, OCF, OGF};
 use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -144,6 +144,8 @@ pub struct SetAdvertisingData {
 }
 
 impl Command for SetAdvertisingData {
+    type Return = StatusReturn;
+
     fn opcode() -> Opcode {
         LEControllerOpcode::SetAdvertisingData.into()
     }
