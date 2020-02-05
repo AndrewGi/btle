@@ -16,6 +16,9 @@ bluez_async = ["bluez", "async", "tokio/uds"]
 async = ["tokio"]
 hci = []
 std = []
+remote = ["std", "hci"]
+remote_async = ["remote", "async", "tokio/tcp"]
+
 [dependencies]
 futures = "0.3.2"
 nix = {version = "0.16.1", optional = true}

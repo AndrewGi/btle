@@ -19,10 +19,19 @@ impl Client {
         Self(stream)
     }
 }
-/*
-    use std::{io, net};
-    pub struct Server {
-        tcp: net::TcpStream,
-        hci: socket::HCISocket,
+#[cfg(feature = "remote_async")]
+pub mod remote_async {
+    use core::task::Context;
+    use tokio::macros::support::{Pin, Poll};
+
+    pub struct AsyncClient(pub tokio::net::TcpStream);
+    impl futures::io::AsyncRead for AsyncClient {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut [u8],
+        ) -> Poll<Result<usize, std::io::Error>> {
+            Pin::new(&mut self.0).poll_read(cx, buf)
+        }
     }
-*/
+}
