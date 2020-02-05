@@ -1,4 +1,7 @@
 //! Generic BLE driver targeting mostly Bluetooth Advertisements. Implements the HCI layer.
+
+// For development, allow dead_code
+#![allow(dead_code)]
 #![no_std]
 extern crate alloc;
 

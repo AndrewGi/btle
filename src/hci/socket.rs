@@ -1,12 +1,6 @@
 use crate::bytes::ToFromBytesEndian;
-use crate::hci::stream::{PacketType, StreamError};
-use crate::hci::{stream, Command, CommandPacket, EventCode};
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-use core::sync::atomic::{AtomicBool, Ordering};
-use futures::io::Error;
-use futures::task::Context;
-use futures::AsyncRead;
+use crate::hci::stream::PacketType;
+use crate::hci::EventCode;
 use std::os::unix::{
     io::{AsRawFd, FromRawFd, RawFd},
     net::UnixStream,
@@ -96,7 +90,7 @@ impl HCISocket {
         })?;
         let stream = unsafe { UnixStream::from_raw_fd(adapter_fd) };
         let out = HCISocket(stream);
-        out.set_filter();
+        out.set_filter()?;
         Ok(out)
     }
     pub fn raw_fd(&self) -> i32 {

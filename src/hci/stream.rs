@@ -66,8 +66,8 @@ pub trait HCIReader {
 }
 #[cfg(feature = "std")]
 pub mod byte {
-    use crate::hci::stream::{HCIReader, StreamError};
-    use crate::hci::{EventCode, EventPacket, HCIConversionError};
+    use crate::hci::stream::StreamError;
+    use crate::hci::{EventCode, EventPacket};
     use alloc::boxed::Box;
     use alloc::vec::Vec;
     use core::convert::TryFrom;
@@ -76,7 +76,6 @@ pub mod byte {
 
     use futures::task::Context;
     use futures::{AsyncRead, Stream};
-    use std::io::Error;
 
     const EVENT_HEADER_LEN: usize = 2;
 
@@ -118,32 +117,34 @@ pub mod byte {
                 buf.resize(len, 0u8);
                 buf.into_boxed_slice()
             };
-            let mut buf = {
-                if let Some(buf) = &mut self.parameters {
+
+            let me = &mut *self;
+            let buf = {
+                if let Some(buf) = &mut me.parameters {
                     buf.as_mut()
                 } else {
-                    self.parameters = Some(make_buf());
-                    self.parameters
+                    me.parameters = Some(make_buf());
+                    me.parameters
                         .as_mut()
                         .expect("just created buffer with `make_buf()`")
                         .as_mut()
                 }
             };
-            while self.pos < (len + EVENT_HEADER_LEN) {
-                let pos = self.pos;
-                let me = &mut *self;
-                let amount =
-                    match Pin::new(&mut *me.reader).poll_read(cx, &mut me.header_buf[pos..]) {
-                        Poll::Ready(r) => match r {
-                            Ok(a) => a,
-                            Err(_) => return Poll::Ready(Some(Err(StreamError::IOError))),
-                        },
-                        Poll::Pending => return Poll::Pending,
-                    };
+            while me.pos < (len + EVENT_HEADER_LEN) {
+                let pos = me.pos;
+                let amount = match Pin::new(&mut *me.reader)
+                    .poll_read(cx, &mut buf[pos - EVENT_HEADER_LEN..])
+                {
+                    Poll::Ready(r) => match r {
+                        Ok(a) => a,
+                        Err(_) => return Poll::Ready(Some(Err(StreamError::IOError))),
+                    },
+                    Poll::Pending => return Poll::Pending,
+                };
                 if amount == 0 {
                     return Poll::Ready(None);
                 }
-                self.pos += amount;
+                me.pos += amount;
             }
             Poll::Ready(Some(Ok(EventPacket::new(
                 opcode,

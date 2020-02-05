@@ -75,7 +75,7 @@ impl TryFrom<OCF> for LEControllerOpcode {
     }
 }
 impl LEControllerOpcode {
-    pub const fn ogf(&self) -> OGF {
+    pub const fn ogf(self) -> OGF {
         OGF::LEController
     }
 }
@@ -160,12 +160,12 @@ impl Command for SetAdvertisingData {
         } else {
             buf[0] = self.len;
             let l = usize::from(self.len);
-            buf[1..1 + l].copy_from_slice(&self.data[..l]);
+            buf[1..][..l].copy_from_slice(&self.data[..l]);
             Ok(())
         }
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(_buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized,
     {
