@@ -21,13 +21,14 @@ impl Client {
 }
 #[cfg(feature = "remote_async")]
 pub mod remote_async {
-    use core::task::Context;
-    use tokio::macros::support::{Pin, Poll};
+    use core::pin::Pin;
+    use core::task::{Context, Poll};
+    use tokio::io::AsyncRead;
 
     pub struct AsyncClient(pub tokio::net::TcpStream);
     impl futures::io::AsyncRead for AsyncClient {
         fn poll_read(
-            self: Pin<&mut Self>,
+            mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             buf: &mut [u8],
         ) -> Poll<Result<usize, std::io::Error>> {
