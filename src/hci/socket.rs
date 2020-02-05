@@ -1,10 +1,14 @@
-use crate::ble::hci::stream::{PacketType, StreamError, StreamSink};
-use crate::ble::hci::{stream, Command, CommandPacket, EventCode};
+use crate::bytes::ToFromBytesEndian;
+use crate::hci::stream::{PacketType, StreamError};
+use crate::hci::{stream, Command, CommandPacket, EventCode};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicBool, Ordering};
+use futures::io::Error;
+use futures::task::Context;
+use futures::AsyncRead;
 use std::os::unix::{
-    io::{FromRawFd, RawFd},
+    io::{AsRawFd, FromRawFd, RawFd},
     net::UnixStream,
 };
 
@@ -51,9 +55,7 @@ struct SockaddrHCI {
 /// Wrapper for a BlueZ HCI Stream. Uses Unix Sockets. `HCISocket`'s have a special filter on them
 /// for HCI Events so that is why they are wrapped. Besides the filter, they are just byte streams
 /// that need to have the Events and Commands abstracted over them.
-pub struct HCISocket {
-    socket: UnixStream,
-}
+pub struct HCISocket(UnixStream);
 /// Turns an libc `ERRNO` error number into a `HCISocketError`.
 pub fn handle_libc_error(i: RawFd) -> Result<i32, HCISocketError> {
     if i < 0 {
@@ -92,19 +94,24 @@ impl HCISocket {
                 std::mem::size_of::<SockaddrHCI>() as u32,
             )
         })?;
-        let is_running = Arc::new(AtomicBool::new(true));
-        let socket = unsafe { UnixStream::from_raw_fd(adapter_fd) };
-        let out = HCISocket {
-            socket: socket.try_clone()?,
-        };
+        let stream = unsafe { UnixStream::from_raw_fd(adapter_fd) };
+        let out = HCISocket(stream);
         out.set_filter();
         Ok(out)
+    }
+    pub fn raw_fd(&self) -> i32 {
+        self.0.as_raw_fd()
+    }
+}
+impl From<HCISocket> for UnixStream {
+    fn from(socket: HCISocket) -> Self {
+        socket.0
     }
 }
 impl HCISocket {
     /// Sets the HCI Event filter on the socket. Should only need to be called once. Is also called
     /// automatically by the `new` constructor.
-    pub fn set_filter(&self) -> Result<(), HCISocketError> {
+    fn set_filter(&self) -> Result<(), HCISocketError> {
         const HCI_FILTER: i32 = 2;
         const SOL_HCI: i32 = 0;
         let type_mask =
@@ -118,7 +125,7 @@ impl HCISocket {
 
         handle_libc_error(unsafe {
             libc::setsockopt(
-                self.socket.as_raw_fd(),
+                self.raw_fd(),
                 SOL_HCI,
                 HCI_FILTER,
                 filter.as_mut_ptr() as *mut _ as *mut libc::c_void,
@@ -128,18 +135,34 @@ impl HCISocket {
         Ok(())
     }
 }
-use std::io::Error;
-impl std::io::Write for HCISocket {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
-        self.socket.write(buf)
+#[cfg(feature = "bluez_async")]
+mod async_socket {
+    use super::HCISocket;
+    use core::convert::TryFrom;
+    use core::pin::Pin;
+    use core::task::{Context, Poll};
+    use tokio::io::AsyncRead;
+    impl TryFrom<HCISocket> for AsyncHCISocket {
+        type Error = std::io::Error;
+
+        /// Returns `std::io::Error` if it can't bind the `UnixStream` to the tokio Event
+        /// loop. Usually safe to `.unwrap()/.expect()` unless bad file descriptor.
+        fn try_from(socket: HCISocket) -> Result<Self, Self::Error> {
+            Ok(AsyncHCISocket(tokio::net::UnixStream::from_std(
+                socket.into(),
+            )?))
+        }
     }
 
-    fn flush(&mut self) -> Result<(), Error> {
-        self.socket.flush()
-    }
-}
-impl std::io::Read for HCISocket {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        self.socket.read(buf)
+    pub struct AsyncHCISocket(pub tokio::net::UnixStream);
+
+    impl futures::AsyncRead for AsyncHCISocket {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut [u8],
+        ) -> Poll<Result<usize, std::io::Error>> {
+            Pin::new(&mut self.0).poll_read(cx, buf)
+        }
     }
 }

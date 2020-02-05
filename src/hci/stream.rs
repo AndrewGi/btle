@@ -74,9 +74,9 @@ pub mod byte {
     use core::pin::Pin;
     use core::task::Poll;
 
-    use futures::io::Error;
     use futures::task::Context;
     use futures::{AsyncRead, Stream};
+    use std::io::Error;
 
     const EVENT_HEADER_LEN: usize = 2;
 
