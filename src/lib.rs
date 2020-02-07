@@ -28,3 +28,5 @@ impl RSSI {
         RSSI(milli_dbm)
     }
 }
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct BTAddress();

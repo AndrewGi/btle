@@ -1,3 +1,4 @@
+/// BlueZ socket layer. Interacts with the BlueZ driver over socket AF_BLUETOOTH.
 use crate::bytes::ToFromBytesEndian;
 use crate::hci::stream::PacketType;
 use crate::hci::EventCode;
@@ -5,7 +6,19 @@ use std::os::unix::{
     io::{AsRawFd, FromRawFd, RawFd},
     net::UnixStream,
 };
+use std::sync::Mutex;
 
+mod ioctl {
+    nix::ioctl_write_int!(hci_device_up, b'H', 201);
+    nix::ioctl_write_int!(hci_device_down, b'H', 202);
+    nix::ioctl_write_int!(hci_device_reset, b'H', 203);
+    nix::ioctl_write_int!(hci_device_stats, b'H', 204);
+    // HCIGETDEVLIST =	_IOR('H', 210, int)
+    nix::ioctl_read!(hci_get_dev_list, b'H', 210, super::HCIDevListReq);
+
+    // HCIGETDEVINFO =	_IOR('H', 211, int)
+    nix::ioctl_read!(hci_get_dev_info, b'H', 211, super::HCIDevInfo);
+}
 #[repr(i32)]
 enum BTProtocol {
     L2CAP = 0,
@@ -33,12 +46,50 @@ enum HCIChannel {
     User = 1,
     Monitor = 2,
     Control = 3,
+    Logging = 4,
 }
 impl From<HCIChannel> for u16 {
     fn from(channel: HCIChannel) -> Self {
         channel as u16
     }
 }
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+struct HCIDevStats {
+    pub err_rx: u32,
+    pub err_tx: u32,
+    pub cmd_tx: u32,
+    pub evt_rx: u32,
+    pub acl_tx: u32,
+    pub acl_rx: u32,
+    pub sco_tx: u32,
+    pub sco_rx: u32,
+    pub byte_rx: u32,
+    pub byte_tx: u32,
+}
+struct HCIDevReq {
+    pub dev_id: u16,
+    pub dev_opt: u32,
+}
+struct HCIDevInfo {
+    pub dev_id: u16,
+    pub name: [u8; 8],
+    pub address: BTAddress,
+    pub flags: u32,
+    pub dev_type: u8,
+    pub features: [u8; 8],
+    pub pkt_type: u32,
+    pub link_policy: u32,
+    pub link_mode: u32,
+    pub acl_mtu: u16,
+    pub acl_pkts: u16,
+    pub sco_mtu: u16,
+    pub sco_pkts: u16,
+    pub stats: HCIDevStats,
+}
+pub struct HCIDevListReq {}
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
+pub struct AdapterID(pub u16);
+
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
 struct SockaddrHCI {
@@ -53,22 +104,31 @@ pub struct HCISocket(UnixStream);
 /// Turns an libc `ERRNO` error number into a `HCISocketError`.
 pub fn handle_libc_error(i: RawFd) -> Result<i32, HCISocketError> {
     if i < 0 {
-        Err(HCISocketError::Other(nix::errno::errno()))
+        Err(match nix::errno::errno() {
+            1 => HCISocketError::PermissionDenied,
+            16 => HCISocketError::Busy,
+            e => HCISocketError::Other(e),
+        })
     } else {
         Ok(i)
     }
 }
+#[derive(Debug)]
 pub enum HCISocketError {
     PermissionDenied,
     DeviceNotFound,
     NotConnected,
+    Busy,
     IO(std::io::Error),
     Other(i32),
 }
 impl HCISocket {
     /// Creates an `HCISocket` based on a `libc` file_descriptor (`i32`). Returns an error if could
     /// not bind to the `adapter_id`.
-    pub fn new(adapter_id: u16) -> Result<HCISocket, HCISocketError> {
+    pub fn new_channel(
+        adapter_id: AdapterID,
+        channel: HCIChannel,
+    ) -> Result<HCISocket, HCISocketError> {
         let adapter_fd = handle_libc_error(unsafe {
             libc::socket(
                 libc::AF_BLUETOOTH,
@@ -78,7 +138,7 @@ impl HCISocket {
         })?;
         let address = SockaddrHCI {
             hci_family: libc::AF_BLUETOOTH as u16,
-            hci_dev: adapter_id,
+            hci_dev: adapter_id.0,
             hci_channel: HCIChannel::User.into(),
         };
         handle_libc_error(unsafe {
@@ -129,8 +189,54 @@ impl HCISocket {
         Ok(())
     }
 }
+
+pub struct Manager {
+    control_fd: Mutex<i32>,
+}
+impl Manager {
+    pub fn new() -> Result<Manager, HCISocketError> {
+        Ok(Manager {
+            control_fd: Mutex::new(handle_libc_error(unsafe {
+                libc::socket(
+                    libc::AF_BLUETOOTH,
+                    libc::SOCK_RAW | libc::SOCK_CLOEXEC,
+                    BTProtocol::HCI.into(),
+                )
+            })?),
+        })
+    }
+    pub fn device_up(&self, adapter_id: AdapterID) -> Result<(), HCISocketError> {
+        let control_lock = self
+            .control_fd
+            .lock()
+            .expect("mutexs only fail when poisoned");
+        let control_fd = *control_lock.deref();
+        unsafe {
+            ioctl::hci_device_up(
+                control_fd,
+                adapter_id.0 as nix::sys::ioctl::ioctl_param_type,
+            )?
+        }
+        Ok(())
+    }
+    pub fn device_down(&self, adapter_id: AdapterID) -> Result<(), HCISocketError> {
+        let control_lock = self
+            .control_fd
+            .lock()
+            .expect("mutexs only fail when poisoned");
+        let control_fd = *control_lock.deref();
+        unsafe {
+            ioctl::hci_device_down(
+                control_fd,
+                adapter_id.0 as nix::sys::ioctl::ioctl_param_type,
+            )?
+        }
+        Ok(())
+    }
+}
+
 #[cfg(feature = "bluez_async")]
-mod async_socket {
+pub mod async_socket {
     use super::HCISocket;
     use core::convert::TryFrom;
     use core::pin::Pin;
@@ -160,3 +266,7 @@ mod async_socket {
         }
     }
 }
+use crate::BTAddress;
+#[cfg(feature = "bluez_async")]
+pub use async_socket::AsyncHCISocket;
+use core::ops::Deref;

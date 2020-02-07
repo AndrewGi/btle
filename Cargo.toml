@@ -11,7 +11,7 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 
 [features]
 default = ["bluez_async"]
-bluez = ["nix", "libc", "hci"]
+bluez = ["nix", "libc", "std", "hci"]
 bluez_async = ["bluez", "async", "tokio/uds"]
 async = ["tokio"]
 hci = []
