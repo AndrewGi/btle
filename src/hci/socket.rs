@@ -48,6 +48,22 @@ pub enum HCIChannel {
     Control = 3,
     Logging = 4,
 }
+impl HCIChannel {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HCIChannel::Raw => "Raw",
+            HCIChannel::User => "User",
+            HCIChannel::Monitor => "Monitor",
+            HCIChannel::Control => "Control",
+            HCIChannel::Logging => "Logging",
+        }
+    }
+}
+impl Display for HCIChannel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        f.write_str(self.as_str())
+    }
+}
 impl From<HCIChannel> for u16 {
     fn from(channel: HCIChannel) -> Self {
         channel as u16
@@ -93,9 +109,9 @@ pub struct AdapterID(pub u16);
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
 struct SockaddrHCI {
-    hci_family: libc::sa_family_t,
-    hci_dev: u16,
-    hci_channel: u16,
+    family: libc::sa_family_t,
+    dev: u16,
+    channel: u16,
 }
 /// Wrapper for a BlueZ HCI Stream. Uses Unix Sockets. `HCISocket`'s have a special filter on them
 /// for HCI Events so that is why they are wrapped. Besides the filter, they are just byte streams
@@ -104,13 +120,16 @@ pub struct HCISocket(UnixStream);
 /// Turns an libc `ERRNO` error number into a `HCISocketError`.
 pub fn handle_libc_error(i: RawFd) -> Result<i32, HCISocketError> {
     if i < 0 {
-        Err(match nix::errno::errno() {
-            1 => HCISocketError::PermissionDenied,
-            16 => HCISocketError::Busy,
-            e => HCISocketError::Other(e),
-        })
+        Err(handle_errno(i as i32))
     } else {
         Ok(i)
+    }
+}
+pub fn handle_errno(err: i32) -> HCISocketError {
+    match nix::errno::errno() {
+        -1 | 1 => HCISocketError::PermissionDenied,
+        -16 | 16 => HCISocketError::Busy,
+        e => HCISocketError::Other(e),
     }
 }
 #[derive(Debug)]
@@ -138,9 +157,9 @@ impl HCISocket {
             )
         })?;
         let address = SockaddrHCI {
-            hci_family: libc::AF_BLUETOOTH as u16,
-            hci_dev: adapter_id.0,
-            hci_channel: channel.into(),
+            family: libc::AF_BLUETOOTH as u16,
+            dev: adapter_id.0,
+            channel: channel.into(),
         };
         handle_libc_error(unsafe {
             libc::bind(
@@ -192,9 +211,9 @@ impl HCISocket {
 }
 fn hci_to_socket_error(err: nix::Error) -> HCISocketError {
     match err {
-        Error::Sys(i) => HCISocketError::Other(i as i32),
-        Error::InvalidPath | Error::InvalidUtf8 => panic!("bad nix path"),
-        Error::UnsupportedOperation => HCISocketError::Unsupported,
+        nix::Error::Sys(i) => handle_errno(i as i32),
+        nix::Error::InvalidPath | nix::Error::InvalidUtf8 => panic!("bad nix path"),
+        nix::Error::UnsupportedOperation => HCISocketError::Unsupported,
     }
 }
 pub struct Manager {
@@ -250,7 +269,7 @@ impl Manager {
         let ctl_fd = *control_lock.deref();
         Self::raw_device_down(ctl_fd, adapter_id)?;
         Self::raw_device_up(ctl_fd, adapter_id)?;
-        HCISocket::new_channel(adapter_id, HCIChannel::User)
+        HCISocket::new_channel(adapter_id, HCIChannel::Raw)
     }
 }
 
@@ -288,5 +307,5 @@ pub mod async_socket {
 use crate::BTAddress;
 #[cfg(feature = "bluez_async")]
 pub use async_socket::AsyncHCISocket;
+use core::fmt::{Display, Formatter};
 use core::ops::Deref;
-use nix::Error;
