@@ -279,7 +279,9 @@ pub mod async_socket {
     use core::convert::TryFrom;
     use core::pin::Pin;
     use core::task::{Context, Poll};
-    use tokio::io::AsyncRead;
+    use futures::io::Error;
+    use tokio::io::{AsyncRead, AsyncWrite};
+
     impl TryFrom<HCISocket> for AsyncHCISocket {
         type Error = std::io::Error;
 
@@ -301,6 +303,23 @@ pub mod async_socket {
             buf: &mut [u8],
         ) -> Poll<Result<usize, std::io::Error>> {
             Pin::new(&mut self.0).poll_read(cx, buf)
+        }
+    }
+    impl futures::AsyncWrite for AsyncHCISocket {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<Result<usize, Error>> {
+            Pin::new(&mut self.0).poll_write(cx, buf)
+        }
+
+        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+            Pin::new(&mut self.0).poll_flush(cx)
+        }
+
+        fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+            Pin::new(&mut self.0).poll_shutdown(cx)
         }
     }
 }

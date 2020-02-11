@@ -133,6 +133,51 @@ pub struct SetScanEnable {
     pub is_enabled: bool,
     pub filter_duplicates: bool,
 }
+impl Command for SetScanEnable {
+    type Return = StatusReturn;
+
+    fn opcode() -> Opcode {
+        LEControllerOpcode::SetScanEnable.into()
+    }
+
+    fn byte_len(&self) -> usize {
+        2
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
+        if buf.len() < 2 {
+            Err(HCIPackError::SmallBuffer)
+        } else {
+            buf[0] = self.is_enabled.into();
+            buf[1] = self.filter_duplicates.into();
+            Ok(())
+        }
+    }
+
+    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    where
+        Self: Sized,
+    {
+        if buf.len() != 2 {
+            Err(HCIPackError::BadLength)
+        } else {
+            let is_enabled = match buf[0] {
+                0 => false,
+                1 => true,
+                _ => return Err(HCIPackError::BadBytes),
+            };
+            let filter_duplicates = match buf[1] {
+                0 => false,
+                1 => true,
+                _ => return Err(HCIPackError::BadBytes),
+            };
+            Ok(Self {
+                is_enabled,
+                filter_duplicates,
+            })
+        }
+    }
+}
 impl SetScanEnable {}
 pub struct SetAdvertisingEnable {
     pub is_enabled: bool,

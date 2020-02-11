@@ -37,6 +37,7 @@ impl TryFrom<u8> for PacketType {
         }
     }
 }
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
 pub enum StreamError {
     CommandError(HCIPackError),
     BadOpcode,
@@ -63,7 +64,7 @@ pub trait HCIWriter<'w> {
         command: Cmd,
     ) -> Result<Self::WriteFuture, HCIPackError> {
         let mut buf = [0_u8; FULL_COMMAND_MAX_LEN];
-        let len = command.byte_len();
+        let len = command.full_len();
         command.pack_full(&mut buf[..len])?;
         Ok(self.send_bytes(&buf[..len]))
     }
@@ -116,6 +117,7 @@ pub mod byte {
         type Item = Result<EventPacket<Box<[u8]>>, StreamError>;
 
         fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            println!("poll next {}", self.pos);
             while self.pos < EVENT_HEADER_LEN {
                 let pos = self.pos;
                 let me = &mut *self;
@@ -127,6 +129,7 @@ pub mod byte {
                         },
                         Poll::Pending => return Poll::Pending,
                     };
+                println!("read something");
                 if amount == 0 {
                     return Poll::Ready(None);
                 }
@@ -192,6 +195,7 @@ pub mod byte {
 
         fn send_bytes(&'w mut self, bytes: &[u8]) -> ByteWrite<'w, R> {
             self.clear();
+            println!("send");
             ByteWrite::new(self.reader, bytes)
         }
     }
@@ -234,6 +238,7 @@ pub mod byte {
             let len = me.len;
             let pos = &mut me.pos;
             let buf = &me.data[..me.len];
+            println!("poller");
             while *pos < len {
                 let amount = match Pin::new(&mut *me.writer).poll_write(cx, &buf[*pos..]) {
                     Poll::Ready(result) => match result {
@@ -244,6 +249,7 @@ pub mod byte {
                 };
                 *pos += amount;
             }
+            println!("flush");
             match Pin::new(&mut *me.writer).poll_flush(cx) {
                 Poll::Pending => Poll::Pending,
                 Poll::Ready(result) => match result {
@@ -255,4 +261,4 @@ pub mod byte {
     }
 }
 #[cfg(feature = "std")]
-pub use byte::ByteStream;
+pub use byte::{ByteStream, ByteWrite};

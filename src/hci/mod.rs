@@ -477,6 +477,7 @@ impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
         }
     }
 }
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum HCIPackError {
     BadLength,
     SmallBuffer,
@@ -524,10 +525,13 @@ impl ReturnParameters for StatusReturn {
 pub trait Command {
     type Return: ReturnParameters;
     fn opcode() -> Opcode;
+    fn full_len(&self) -> usize {
+        self.byte_len() + OPCODE_LEN + 1
+    }
     fn byte_len(&self) -> usize;
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
     fn pack_full(&self, buf: &mut [u8]) -> Result<usize, HCIPackError> {
-        if buf.len() != self.byte_len() + OPCODE_LEN + 1 {
+        if buf.len() != self.full_len() {
             Err(HCIPackError::BadLength)
         } else {
             self.pack_into(&mut buf[3..])?;
