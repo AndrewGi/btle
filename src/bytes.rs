@@ -22,11 +22,12 @@ pub struct BytesMut<'a> {
 
 impl Bytes<'_> {
     #[must_use]
-    pub const fn new_with_length(data: &[u8], length: usize) -> Bytes {
+    pub fn new_with_length(data: &[u8], length: usize) -> Bytes {
+        assert!(length <= data.len(), "length is bigger than the capacity");
         Bytes { data, length }
     }
     #[must_use]
-    pub const fn new(data: &[u8]) -> Bytes {
+    pub fn new(data: &[u8]) -> Bytes {
         Self::new_with_length(data, data.len())
     }
 }

@@ -1,4 +1,6 @@
-use crate::hci::{Command, ErrorCode, EventPacket, HCIConversionError, HCIPackError};
+use crate::hci::{
+    Command, ErrorCode, EventPacket, HCIConversionError, HCIPackError, FULL_COMMAND_MAX_LEN,
+};
 use alloc::boxed::Box;
 use core::convert::TryFrom;
 
@@ -54,20 +56,28 @@ pub trait WriteStream {
 }
 */
 
-pub trait HCIWriter {
-    fn send_command<Fut, Cmd: Command>(&mut self, command: Cmd) -> Fut
-    where
-        Fut: core::future::Future<Output = Result<Cmd::Return, StreamError>>;
+pub trait HCIWriter<'w> {
+    type WriteFuture: core::future::Future<Output = Result<(), StreamError>> + 'w;
+    fn send_command<Cmd: Command>(
+        &'w mut self,
+        command: Cmd,
+    ) -> Result<Self::WriteFuture, HCIPackError> {
+        let mut buf = [0_u8; FULL_COMMAND_MAX_LEN];
+        let len = command.byte_len();
+        command.pack_full(&mut buf[..len])?;
+        Ok(self.send_bytes(&buf[..len]))
+    }
+    fn send_bytes(&'w mut self, bytes: &[u8]) -> Self::WriteFuture;
 }
-pub trait HCIReader {
-    fn read_event<Fut>(&mut self) -> Fut
-    where
-        Fut: core::future::Future<Output = Result<EventPacket<Box<[u8]>>, StreamError>>;
+pub trait HCIReader<'r> {
+    type EventFuture: core::future::Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>>
+        + 'r;
+    fn read_event(&'r mut self) -> Self::EventFuture;
 }
 #[cfg(feature = "std")]
 pub mod byte {
-    use crate::hci::stream::StreamError;
-    use crate::hci::{EventCode, EventPacket};
+    use crate::hci::stream::{HCIReader, HCIWriter, StreamError};
+    use crate::hci::{EventCode, EventPacket, FULL_COMMAND_MAX_LEN};
     use alloc::boxed::Box;
     use alloc::vec::Vec;
     use core::convert::TryFrom;
@@ -75,18 +85,34 @@ pub mod byte {
     use core::task::Poll;
 
     use futures::task::Context;
-    use futures::{AsyncRead, Stream};
+    use futures::{AsyncRead, AsyncWrite, Stream, StreamExt};
 
     const EVENT_HEADER_LEN: usize = 2;
 
-    pub struct HCIByteReader<'r, R: AsyncRead + Unpin> {
+    pub struct ByteStream<'r, R: AsyncRead + Unpin> {
         reader: &'r mut R,
         pos: usize,
         header_buf: [u8; EVENT_HEADER_LEN],
         parameters: Option<Box<[u8]>>,
     }
-
-    impl<'r, R: AsyncRead + Unpin> Stream for HCIByteReader<'r, R> {
+    impl<'r, R: AsyncRead + Unpin> ByteStream<'r, R> {
+        pub fn new(reader: &'r mut R) -> Self {
+            Self {
+                reader,
+                pos: 0,
+                header_buf: [0_u8; EVENT_HEADER_LEN],
+                parameters: None,
+            }
+        }
+        /// Clear the Read state from the ByteStream.
+        /// If any message is in the process of being received, it will lose all that data.
+        pub fn clear(&mut self) {
+            self.pos = 0;
+            self.header_buf = Default::default();
+            self.parameters = None
+        }
+    }
+    impl<'r, R: AsyncRead + Unpin> Stream for ByteStream<'r, R> {
         type Item = Result<EventPacket<Box<[u8]>>, StreamError>;
 
         fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -154,4 +180,79 @@ pub mod byte {
             ))))
         }
     }
+    impl<'f, 'r: 'f, R: AsyncRead + Unpin> HCIReader<'f> for ByteStream<'r, R> {
+        type EventFuture = futures::stream::Next<'f, Self>;
+
+        fn read_event(&'f mut self) -> Self::EventFuture {
+            self.next()
+        }
+    }
+    impl<'w, 'r: 'w, R: AsyncRead + Unpin + AsyncWrite> HCIWriter<'w> for ByteStream<'r, R> {
+        type WriteFuture = ByteWrite<'w, R>;
+
+        fn send_bytes(&'w mut self, bytes: &[u8]) -> ByteWrite<'w, R> {
+            self.clear();
+            ByteWrite::new(self.reader, bytes)
+        }
+    }
+
+    pub struct ByteWrite<'w, W: AsyncWrite + Unpin> {
+        writer: &'w mut W,
+        data: [u8; FULL_COMMAND_MAX_LEN],
+        pos: usize,
+        len: usize,
+    }
+    impl<'w, W: AsyncWrite + Unpin> ByteWrite<'w, W> {
+        pub fn new(writer: &'w mut W, data: &[u8]) -> Self {
+            let mut buf = [0_u8; FULL_COMMAND_MAX_LEN];
+            buf[..data.len()].copy_from_slice(data);
+            Self {
+                writer,
+                data: buf,
+                pos: 0,
+                len: data.len(),
+            }
+        }
+        pub fn bytes_left(&self) -> usize {
+            self.len - self.pos
+        }
+        pub fn is_done(&self) -> bool {
+            self.bytes_left() == 0
+        }
+        pub fn buf(&self) -> &[u8] {
+            &self.data[self.pos..self.len]
+        }
+        pub fn pinned_writer(&mut self) -> Pin<&mut W> {
+            Pin::new(self.writer)
+        }
+    }
+    impl<'w, W: AsyncWrite + Unpin> core::future::Future for ByteWrite<'w, W> {
+        type Output = Result<(), StreamError>;
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            let me = &mut *self;
+            let len = me.len;
+            let pos = &mut me.pos;
+            let buf = &me.data[..me.len];
+            while *pos < len {
+                let amount = match Pin::new(&mut *me.writer).poll_write(cx, &buf[*pos..]) {
+                    Poll::Ready(result) => match result {
+                        Ok(amount) => amount,
+                        Err(_) => return Poll::Ready(Err(StreamError::IOError)),
+                    },
+                    Poll::Pending => return Poll::Pending,
+                };
+                *pos += amount;
+            }
+            match Pin::new(&mut *me.writer).poll_flush(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(result) => match result {
+                    Ok(_) => Poll::Ready(Ok(())),
+                    Err(_) => Poll::Ready(Err(StreamError::IOError)),
+                },
+            }
+        }
+    }
 }
+#[cfg(feature = "std")]
+pub use byte::ByteStream;

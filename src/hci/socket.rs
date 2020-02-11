@@ -120,13 +120,13 @@ pub struct HCISocket(UnixStream);
 /// Turns an libc `ERRNO` error number into a `HCISocketError`.
 pub fn handle_libc_error(i: RawFd) -> Result<i32, HCISocketError> {
     if i < 0 {
-        Err(handle_errno(i as i32))
+        Err(handle_errno(nix::errno::errno()))
     } else {
         Ok(i)
     }
 }
 pub fn handle_errno(err: i32) -> HCISocketError {
-    match nix::errno::errno() {
+    match err {
         -1 | 1 => HCISocketError::PermissionDenied,
         -16 | 16 => HCISocketError::Busy,
         e => HCISocketError::Other(e),

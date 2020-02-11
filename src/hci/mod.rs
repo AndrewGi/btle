@@ -13,6 +13,32 @@ use core::convert::{TryFrom, TryInto};
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct HCIVersionError(());
 
+pub const MAX_ACL_SIZE: usize = (1492 + 4);
+pub const MAX_SCO_SIZE: usize = 255;
+pub const MAX_EVENT_SIZE: usize = 260;
+pub const MAX_FRAME_SIZE: usize = MAX_ACL_SIZE + 4;
+
+pub enum DevEvent {
+    Reg = 1,
+    Unreg = 2,
+    Up = 3,
+    Down = 4,
+    Suspend = 5,
+    Resume = 6,
+}
+pub enum BusType {
+    Virtual = 0,
+    USB = 1,
+    PCCard = 2,
+    UART = 3,
+    RS232 = 4,
+    PCI = 5,
+    SDIO = 6,
+}
+pub enum ControllerType {
+    BREDR = 0x00,
+    AMP = 0x01,
+}
 /// Bluetooth Version reported by HCI Controller according to HCISpec. More versions may be added in
 /// the future once they are released.
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug, Hash)]
@@ -325,6 +351,7 @@ impl TryFrom<u8> for EventCode {
 }
 pub const EVENT_MAX_LEN: usize = 255;
 pub const COMMAND_MAX_LEN: usize = 255;
+pub const FULL_COMMAND_MAX_LEN: usize = COMMAND_MAX_LEN + OPCODE_LEN + 1;
 pub const EVENT_CODE_LEN: usize = 1;
 /// 6 bit OGF. (OpCode Ground Field)
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
