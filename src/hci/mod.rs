@@ -367,6 +367,11 @@ pub enum OGF {
     LEController = 0x08,
     VendorSpecific = 0x3F,
 }
+impl Default for OGF {
+    fn default() -> Self {
+        OGF::NOP
+    }
+}
 impl From<OGF> for u8 {
     fn from(ogf: OGF) -> Self {
         ogf as u8
@@ -392,7 +397,7 @@ impl TryFrom<u8> for OGF {
 }
 pub const OCF_MAX: u16 = (1 << 10) - 1;
 /// 10 bit OCF (OpCode Command Field)
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 pub struct OCF(u16);
 impl OCF {
     /// Creates a new 10-bit OCF
@@ -414,7 +419,7 @@ impl From<OCF> for u16 {
 }
 const OPCODE_LEN: usize = 2;
 /// 16-bit HCI Opcode. Contains a OGF (OpCode Ground Field) and OCF (OpCode Command Field).
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 pub struct Opcode(pub OGF, pub OCF);
 impl Opcode {
     pub const fn byte_len() -> usize {

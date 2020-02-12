@@ -1,7 +1,4 @@
 /// BlueZ socket layer. Interacts with the BlueZ driver over socket AF_BLUETOOTH.
-use crate::bytes::ToFromBytesEndian;
-use crate::hci::stream::PacketType;
-use crate::hci::EventCode;
 use std::os::unix::{
     io::{AsRawFd, FromRawFd, RawFd},
     net::UnixStream,
@@ -138,6 +135,7 @@ pub enum HCISocketError {
     DeviceNotFound,
     NotConnected,
     Unsupported,
+    BadData,
     Busy,
     IO(std::io::Error),
     Other(i32),
@@ -170,8 +168,11 @@ impl HCISocket {
         })?;
         let stream = unsafe { UnixStream::from_raw_fd(adapter_fd) };
         let out = HCISocket(stream);
-        out.set_filter()?;
+        out.set_socket_filter(&Filter::default())?;
         Ok(out)
+    }
+    pub unsafe fn new_unchecked(stream: UnixStream) -> HCISocket {
+        Self(stream)
     }
     pub fn raw_fd(&self) -> i32 {
         self.0.as_raw_fd()
@@ -182,31 +183,59 @@ impl From<HCISocket> for UnixStream {
         socket.0
     }
 }
+pub enum HCISocketOption {
+    DataDir = 1,
+    Filter = 2,
+    Timestamp = 3,
+}
+const SOL_HCI: i32 = 0;
 impl HCISocket {
     /// Sets the HCI Event filter on the socket. Should only need to be called once. Is also called
     /// automatically by the `new` constructor.
-    fn set_filter(&self) -> Result<(), HCISocketError> {
-        const HCI_FILTER: i32 = 2;
-        const SOL_HCI: i32 = 0;
-        let type_mask =
-            (1u32 << u32::from(PacketType::Command)) | (1u32 << u32::from(PacketType::Event));
-        let event_mask1 = (1u32 << u32::from(EventCode::CommandComplete))
-            | (1u32 << u32::from(EventCode::CommandStatus));
-
-        let mut filter = [0_u8; 14];
-        filter[0..4].copy_from_slice(&type_mask.to_bytes_le());
-        filter[4..8].copy_from_slice(&event_mask1.to_bytes_le());
-
+    pub fn set_socket_filter(&self, filter: &Filter) -> Result<(), HCISocketError> {
+        Self::set_filter_raw(self.raw_fd(), filter)
+    }
+    pub fn set_filter_raw(fd: RawFd, filter: &Filter) -> Result<(), HCISocketError> {
+        let mut filter_bytes = filter.pack();
         handle_libc_error(unsafe {
             libc::setsockopt(
-                self.raw_fd(),
+                fd,
                 SOL_HCI,
-                HCI_FILTER,
-                filter.as_mut_ptr() as *mut _ as *mut libc::c_void,
-                filter.len() as u32,
+                HCISocketOption::Filter as i32,
+                filter_bytes.as_mut_ptr() as *mut _ as *mut libc::c_void,
+                FILTER_LEN as u32,
             )
         })?;
         Ok(())
+    }
+    pub fn get_socket_filter(&self) -> Result<Filter, HCISocketError> {
+        Self::get_filter_raw(self.raw_fd())
+    }
+    pub fn get_filter_raw(fd: RawFd) -> Result<Filter, HCISocketError> {
+        let mut buf = [0_u8; FILTER_LEN];
+        let mut len = FILTER_LEN as u32;
+        handle_libc_error(unsafe {
+            libc::getsockopt(
+                fd,
+                SOL_HCI,
+                HCISocketOption::Filter as i32,
+                buf.as_mut_ptr() as *mut _ as *mut libc::c_void,
+                &mut len,
+            )
+        })?;
+        debug_assert_eq!(len, FILTER_LEN as u32);
+        Filter::unpack(&buf[..]).ok_or(HCISocketError::BadData)
+    }
+}
+impl HCIFilterable for HCISocket {
+    fn set_filter(&mut self, filter: &Filter) -> Result<(), StreamError> {
+        self.set_socket_filter(filter)
+            .ok()
+            .ok_or(StreamError::IOError)
+    }
+
+    fn get_filter(&self) -> Result<Filter, StreamError> {
+        self.get_socket_filter().ok().ok_or(StreamError::IOError)
     }
 }
 fn hci_to_socket_error(err: nix::Error) -> HCISocketError {
@@ -276,12 +305,13 @@ impl Manager {
 #[cfg(feature = "bluez_async")]
 pub mod async_socket {
     use super::HCISocket;
+    use crate::hci::stream::{Filter, HCIFilterable, StreamError};
     use core::convert::TryFrom;
     use core::pin::Pin;
     use core::task::{Context, Poll};
     use futures::io::Error;
+    use std::os::unix::io::AsRawFd;
     use tokio::io::{AsyncRead, AsyncWrite};
-
     impl TryFrom<HCISocket> for AsyncHCISocket {
         type Error = std::io::Error;
 
@@ -293,9 +323,20 @@ pub mod async_socket {
             )?))
         }
     }
-
     pub struct AsyncHCISocket(pub tokio::net::UnixStream);
+    impl HCIFilterable for AsyncHCISocket {
+        fn set_filter(&mut self, filter: &Filter) -> Result<(), StreamError> {
+            HCISocket::set_filter_raw(self.0.as_raw_fd(), filter)
+                .ok()
+                .ok_or(StreamError::IOError)
+        }
 
+        fn get_filter(&self) -> Result<Filter, StreamError> {
+            HCISocket::get_filter_raw(self.0.as_raw_fd())
+                .ok()
+                .ok_or(StreamError::IOError)
+        }
+    }
     impl futures::AsyncRead for AsyncHCISocket {
         fn poll_read(
             mut self: Pin<&mut Self>,
@@ -323,6 +364,7 @@ pub mod async_socket {
         }
     }
 }
+use crate::hci::stream::{Filter, HCIFilterable, StreamError, FILTER_LEN};
 use crate::BTAddress;
 #[cfg(feature = "bluez_async")]
 pub use async_socket::AsyncHCISocket;
