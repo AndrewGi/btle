@@ -182,9 +182,10 @@ pub mod byte {
     use core::pin::Pin;
     use core::task::Poll;
 
-    use futures::task::Context;
-    use futures::{AsyncRead, AsyncWrite, Stream, StreamExt};
-
+    use core::task::Context;
+    use futures_core::Stream;
+    use futures_io::{AsyncRead, AsyncWrite};
+    use futures_util::StreamExt;
     const EVENT_HEADER_LEN: usize = 2;
 
     pub struct ByteStream<'r, R: AsyncRead + Unpin> {
@@ -281,7 +282,7 @@ pub mod byte {
         }
     }
     impl<'f, 'r: 'f, R: AsyncRead + Unpin> HCIReader<'f> for ByteStream<'r, R> {
-        type EventFuture = futures::stream::Next<'f, Self>;
+        type EventFuture = futures_util::stream::Next<'f, Self>;
 
         fn read_event(&'f mut self) -> Self::EventFuture {
             self.next()
