@@ -11,8 +11,8 @@ extern crate std;
 
 pub mod adapter;
 pub mod advertisement;
+pub mod advertiser;
 pub mod bytes;
-pub mod gap;
 #[cfg(feature = "hci")]
 pub mod hci;
 pub mod manager;
