@@ -2,7 +2,7 @@
 
 // For development, allow dead_code
 #![allow(dead_code)]
-#![no_std]
+//#![no_std]
 extern crate alloc;
 
 #[cfg(feature = "std")]

@@ -42,6 +42,9 @@ impl TryFrom<u8> for PacketType {
 pub enum StreamError {
     CommandError(HCIPackError),
     BadOpcode,
+    BadEventCode,
+    StreamClosed,
+    StreamFailed,
     IOError,
     HCIError(ErrorCode),
 }
@@ -145,10 +148,25 @@ pub trait HCIFilterable {
 }
 pub trait HCIWriter<'w> {
     type WriteFuture: core::future::Future<Output = Result<(), StreamError>> + 'w;
-    fn send_command<Cmd: Command>(
-        &'w mut self,
+
+    fn send_bytes(&'w mut self, bytes: &[u8]) -> Self::WriteFuture;
+}
+pub struct HCIStream<'s, S: HCIWriter<'s> + HCIReader<'s> + HCIFilterable>{
+    pub stream: S,
+    _lifetime: core::marker::PhantomData<&'s S>,
+}
+pub const HCI_EVENT_READ_TRIES: usize = 10;
+impl<'s, S: HCIWriter<'s> + HCIReader<'s> + HCIFilterable> HCIStream<'s, S> {
+    pub fn new(stream: S) -> Self {
+        Self {
+            stream,
+            _lifetime: core::marker::PhantomData
+        }
+    }
+    pub async fn send_command<Cmd: Command>(
+        &'s mut self,
         command: Cmd,
-    ) -> Result<Self::WriteFuture, StreamError> {
+    ) -> Result<Cmd::Return, StreamError> {
         let mut buf = [0_u8; FULL_COMMAND_MAX_LEN];
         let len = command.full_len();
         command
@@ -159,13 +177,36 @@ pub trait HCIWriter<'w> {
         filter.enable_type(PacketType::Event);
         filter.enable_event(EventCode::CommandStatus);
         filter.enable_event(EventCode::CommandComplete);
+        filter.enable_event(EventCode::LEMeta);
+        const EVENT_CODE: EventCode = Cmd::Return::EVENT_CODE;
+        if !filter.get_event(EVENT_CODE) {
+            return Err(StreamError::BadEventCode)
+        }
         *filter.opcode_mut() = Cmd::opcode();
-        self.set_filter(&filter)?;
-        Ok(self.send_bytes(&buf[..len]))
+        let old_filter = self.stream.get_filter()?;
+        self.stream.set_filter(&filter)?;
+        self.stream.send_bytes(&buf[..len]).await?;
+
+        for try_i in 0..HCI_EVENT_READ_TRIES {
+            let event: EventPacket<Box<[u8]>> = self.stream.read_event().await.ok_or(StreamError::StreamClosed)??;
+            match event.event_opcode {
+                EventCode::CommandComplete => {
+
+                },
+                EventCode::CommandStatus => {
+                    if event.event_opcode != EVENT_CODE {
+                        continue;
+                    }
+                    let status =
+                },
+                EventCode::LEMeta => {
+                    
+                },
+                _ => unreachable!("filter should not allow any other event codes")
+            }
+        }
+        Err(StreamError::StreamFailed)
     }
-    fn send_bytes(&'w mut self, bytes: &[u8]) -> Self::WriteFuture;
-    fn set_filter(&mut self, filter: &Filter) -> Result<(), StreamError>;
-    fn get_filter(&self) -> Result<Filter, StreamError>;
 }
 pub trait HCIReader<'r> {
     type EventFuture: core::future::Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>>
@@ -211,6 +252,16 @@ pub mod byte {
             self.parameters = None
         }
     }
+    impl<'r, R: AsyncRead + HCIFilterable + Unpin> HCIFilterable for ByteStream<'r, R> {
+        fn set_filter(&mut self, filter: &Filter) -> Result<(), StreamError> {
+            self.reader.set_filter(filter)
+        }
+
+        fn get_filter(&self) -> Result<Filter, StreamError> {
+            self.reader.get_filter()
+        }
+    }
+
     impl<'r, R: AsyncRead + Unpin> Stream for ByteStream<'r, R> {
         type Item = Result<EventPacket<Box<[u8]>>, StreamError>;
 
@@ -288,7 +339,7 @@ pub mod byte {
             self.next()
         }
     }
-    impl<'w, 'r: 'w, R: AsyncRead + Unpin + AsyncWrite + HCIFilterable> HCIWriter<'w>
+    impl<'w, 'r: 'w, R: AsyncRead + Unpin + AsyncWrite> HCIWriter<'w>
         for ByteStream<'r, R>
     {
         type WriteFuture = ByteWrite<'w, R>;
@@ -298,13 +349,6 @@ pub mod byte {
             ByteWrite::new(self.reader, bytes)
         }
 
-        fn set_filter(&mut self, filter: &Filter) -> Result<(), StreamError> {
-            self.reader.set_filter(filter)
-        }
-
-        fn get_filter(&self) -> Result<Filter, StreamError> {
-            self.reader.get_filter()
-        }
     }
 
     pub struct ByteWrite<'w, W: AsyncWrite + Unpin> {

@@ -484,15 +484,24 @@ impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
 }
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum HCIPackError {
+    BadOpcode,
     BadLength,
     SmallBuffer,
     BadBytes,
 }
 pub trait ReturnParameters {
+    const EVENT_CODE: EventCode;
     fn byte_len(&self) -> usize;
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized;
+    fn unpack_from_packet<Storage: AsRef<[u8]>>(packet: &EventPacket<Storage>) -> Result<Self, HCIPackError> {
+        if packet.event_opcode != Self::EVENT_CODE {
+            Err(HCIPackError::BadOpcode)
+        } else {
+            Self::unpack_from(packet.parameters.as_ref())
+        }
+    }
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
 }
 pub struct StatusReturn {
@@ -504,6 +513,8 @@ impl StatusReturn {
     }
 }
 impl ReturnParameters for StatusReturn {
+    const EVENT_CODE: EventCode = EventCode::CommandComplete;
+
     fn byte_len(&self) -> usize {
         Self::byte_len()
     }
