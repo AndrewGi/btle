@@ -1,10 +1,10 @@
+use core::pin::Pin;
 /// BlueZ socket layer. Interacts with the BlueZ driver over socket AF_BLUETOOTH.
 use std::os::unix::{
     io::{AsRawFd, FromRawFd, RawFd},
     net::UnixStream,
 };
 use std::sync::Mutex;
-
 mod ioctl {
     nix::ioctl_write_int!(hci_device_up, b'H', 201);
     nix::ioctl_write_int!(hci_device_down, b'H', 202);
@@ -228,13 +228,13 @@ impl HCISocket {
     }
 }
 impl HCIFilterable for HCISocket {
-    fn set_filter(&mut self, filter: &Filter) -> Result<(), StreamError> {
+    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), StreamError> {
         self.set_socket_filter(filter)
             .ok()
             .ok_or(StreamError::IOError)
     }
 
-    fn get_filter(&self) -> Result<Filter, StreamError> {
+    fn get_filter(self: Pin<&Self>) -> Result<Filter, StreamError> {
         self.get_socket_filter().ok().ok_or(StreamError::IOError)
     }
 }
@@ -325,13 +325,13 @@ pub mod async_socket {
     }
     pub struct AsyncHCISocket(pub tokio::net::UnixStream);
     impl HCIFilterable for AsyncHCISocket {
-        fn set_filter(&mut self, filter: &Filter) -> Result<(), StreamError> {
+        fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), StreamError> {
             HCISocket::set_filter_raw(self.0.as_raw_fd(), filter)
                 .ok()
                 .ok_or(StreamError::IOError)
         }
 
-        fn get_filter(&self) -> Result<Filter, StreamError> {
+        fn get_filter(self: Pin<&Self>) -> Result<Filter, StreamError> {
             HCISocket::get_filter_raw(self.0.as_raw_fd())
                 .ok()
                 .ok_or(StreamError::IOError)
