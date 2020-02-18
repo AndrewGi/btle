@@ -1,5 +1,7 @@
-use crate::hci::{Command, HCIConversionError, HCIPackError, Opcode, StatusReturn, OCF, OGF};
+use crate::hci::{HCIConversionError, HCIPackError, Opcode, OCF, OGF};
 use core::convert::{TryFrom, TryInto};
+use crate::hci::command::Command;
+use crate::hci::event::StatusReturn;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[repr(u16)]

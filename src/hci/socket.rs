@@ -309,7 +309,7 @@ pub mod async_socket {
     use core::convert::TryFrom;
     use core::pin::Pin;
     use core::task::{Context, Poll};
-    use futures::io::Error;
+    use futures_io::Error;
     use std::os::unix::io::AsRawFd;
     use tokio::io::{AsyncRead, AsyncWrite};
     impl TryFrom<HCISocket> for AsyncHCISocket {
@@ -337,7 +337,7 @@ pub mod async_socket {
                 .ok_or(StreamError::IOError)
         }
     }
-    impl futures::AsyncRead for AsyncHCISocket {
+    impl futures_io::AsyncRead for AsyncHCISocket {
         fn poll_read(
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
@@ -346,7 +346,7 @@ pub mod async_socket {
             Pin::new(&mut self.0).poll_read(cx, buf)
         }
     }
-    impl futures::AsyncWrite for AsyncHCISocket {
+    impl futures_io::AsyncWrite for AsyncHCISocket {
         fn poll_write(
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
