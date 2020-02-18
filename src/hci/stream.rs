@@ -1,5 +1,6 @@
-use crate::hci::{ErrorCode,HCIConversionError, HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
-use crate::hci::event::EventCode;
+use crate::hci::command::Command;
+use crate::hci::event::{EventCode, EventPacket, ReturnParameters};
+use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
 use alloc::boxed::Box;
 use core::convert::{TryFrom, TryInto};
 use core::future::Future;
@@ -145,14 +146,16 @@ pub trait HCIFilterable {
     fn get_filter(&self) -> Result<Filter, StreamError>;
 }
 pub trait HCIWriter {
-
     /// Work around for async in traits. Traits can't return a generic type with a lifetime bound
     /// to the function call (like below). But they can return a dynamic type with the lifetime bound
     /// to the function call. Sadly, this work around requires boxing the return value which
     /// is non-zero overhead.
-    fn send_bytes<'f>(&'f mut self, bytes: &[u8]) -> Box<dyn Future<Output=Result<(), StreamError>> + Unpin + 'f>;
+    fn send_bytes<'f>(
+        &'f mut self,
+        bytes: &[u8],
+    ) -> Box<dyn Future<Output = Result<(), StreamError>> + Unpin + 'f>;
 }
-pub struct HCIStream<S: HCIWriter + HCIReader + HCIFilterable>{
+pub struct HCIStream<S: HCIWriter + HCIReader + HCIFilterable> {
     pub stream: S,
 }
 
@@ -161,14 +164,18 @@ pub trait HCIReader {
     /// to the function call (like below). But they can return a dynamic type with the lifetime bound
     /// to the function call. Sadly, this work around requires boxing the return value which
     /// is non-zero overhead.
-    fn read_event<'f>(&'f mut self) -> Box<dyn core::future::Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>> + Unpin + 'f>;
+    fn read_event<'f>(
+        &'f mut self,
+    ) -> Box<
+        dyn core::future::Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>>
+            + Unpin
+            + 'f,
+    >;
 }
 pub const HCI_EVENT_READ_TRIES: usize = 10;
 impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
     pub fn new(stream: S) -> Self {
-        Self {
-            stream,
-        }
+        Self { stream }
     }
     pub async fn send_command<Cmd: Command, Return: ReturnParameters>(
         &mut self,
@@ -189,7 +196,7 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
         */
         filter.enable_event(Return::EVENT_CODE);
         if !filter.get_event(Return::EVENT_CODE) {
-            return Err(StreamError::BadEventCode)
+            return Err(StreamError::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
         let old_filter = self.stream.get_filter()?;
@@ -197,10 +204,14 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
         self.stream.send_bytes(&buf[..len]).await?;
 
         for _try_i in 0..HCI_EVENT_READ_TRIES {
-            let event: EventPacket<Box<[u8]>> = self.stream.read_event().await.ok_or(StreamError::StreamClosed)??;
+            let event: EventPacket<Box<[u8]>> = self
+                .stream
+                .read_event()
+                .await
+                .ok_or(StreamError::StreamClosed)??;
             if event.event_code() == Return::EVENT_CODE {
                 self.stream.set_filter(&old_filter)?;
-                return Return::unpack_from(event.parameters()).map_err(StreamError::CommandError)
+                return Return::unpack_from(event.parameters()).map_err(StreamError::CommandError);
             }
         }
         Err(StreamError::StreamFailed)
@@ -208,20 +219,20 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
 }
 #[cfg(feature = "std")]
 pub mod byte {
-    use crate::hci::stream::{Filter, HCIFilterable, HCIReader, HCIWriter, StreamError};
-    use crate::hci::{FULL_COMMAND_MAX_LEN};
     use crate::hci::event::EventCode;
+    use crate::hci::stream::{Filter, HCIFilterable, HCIReader, HCIWriter, StreamError};
+    use crate::hci::FULL_COMMAND_MAX_LEN;
     use alloc::boxed::Box;
     use alloc::vec::Vec;
     use core::convert::TryFrom;
     use core::pin::Pin;
     use core::task::Poll;
 
+    use crate::hci::event::EventPacket;
     use core::task::Context;
     use futures_core::Stream;
     use futures_io::{AsyncRead, AsyncWrite};
     use futures_util::StreamExt;
-    use crate::hci::event::EventPacket;
 
     const EVENT_HEADER_LEN: usize = 2;
 
@@ -262,18 +273,17 @@ pub mod byte {
         type Item = Result<EventPacket<Box<[u8]>>, StreamError>;
 
         fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            println!("poll next {}", self.pos);
             while self.pos < EVENT_HEADER_LEN {
                 let pos = self.pos;
                 let me = &mut *self;
-                let amount =
-                    match Pin::new(&mut me.reader).poll_read(cx, &mut me.header_buf[pos..]) {
-                        Poll::Ready(r) => match r {
-                            Ok(a) => a,
-                            Err(_) => return Poll::Ready(Some(Err(StreamError::IOError))),
-                        },
-                        Poll::Pending => return Poll::Pending,
-                    };
+                let amount = match Pin::new(&mut me.reader).poll_read(cx, &mut me.header_buf[pos..])
+                {
+                    Poll::Ready(r) => match r {
+                        Ok(a) => a,
+                        Err(_) => return Poll::Ready(Some(Err(StreamError::IOError))),
+                    },
+                    Poll::Pending => return Poll::Pending,
+                };
                 println!("read something");
                 if amount == 0 {
                     return Poll::Ready(None);
@@ -329,19 +339,25 @@ pub mod byte {
         }
     }
     impl<R: AsyncRead + Unpin> HCIReader for ByteStream<R> {
-        fn read_event<'f>(&'f mut self) -> Box<dyn core::future::Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>> + Unpin + 'f> {
+        fn read_event<'f>(
+            &'f mut self,
+        ) -> Box<
+            dyn core::future::Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>>
+                + Unpin
+                + 'f,
+        > {
             // See HCIReader for why we box the return
             Box::new(self.next())
         }
     }
-    impl<R: AsyncRead + Unpin + AsyncWrite> HCIWriter
-        for ByteStream<R>
-    {
-        fn send_bytes<'f>(&'f mut self, bytes: &[u8]) -> Box<dyn core::future::Future<Output=Result<(), StreamError>> + Unpin +'f>{
+    impl<R: AsyncRead + Unpin + AsyncWrite> HCIWriter for ByteStream<R> {
+        fn send_bytes<'f>(
+            &'f mut self,
+            bytes: &[u8],
+        ) -> Box<dyn core::future::Future<Output = Result<(), StreamError>> + Unpin + 'f> {
             self.clear();
             Box::new(ByteWrite::new(&mut self.reader, bytes))
         }
-
     }
 
     pub struct ByteWrite<'w, W: AsyncWrite + Unpin> {
@@ -410,6 +426,3 @@ pub mod byte {
 }
 #[cfg(feature = "std")]
 pub use byte::{ByteStream, ByteWrite};
-use crate::hci::event::{ReturnParameters, EventPacket};
-use crate::hci::command::Command;
-
