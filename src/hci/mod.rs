@@ -200,6 +200,7 @@ impl TryFrom<u8> for ErrorCode {
     }
 }
 /// HCI Event Code. 8-bit code corresponding to an HCI Event. Check the Bluetooth Core Spec for more.
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum EventCode {
     InquiryComplete = 0x01,
     InquiryResult = 0x02,
@@ -495,7 +496,12 @@ pub trait ReturnParameters {
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized;
-    fn unpack_from_packet<Storage: AsRef<[u8]>>(packet: &EventPacket<Storage>) -> Result<Self, HCIPackError> {
+    fn unpack_from_packet<Storage: AsRef<[u8]>>(
+        packet: &EventPacket<Storage>,
+    ) -> Result<Self, HCIPackError>
+    where
+        Self: Sized,
+    {
         if packet.event_opcode != Self::EVENT_CODE {
             Err(HCIPackError::BadOpcode)
         } else {

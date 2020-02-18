@@ -1,6 +1,6 @@
 use crate::hci::{
     Command, ErrorCode, EventCode, EventPacket, HCIConversionError, HCIPackError, Opcode,
-    FULL_COMMAND_MAX_LEN,
+    ReturnParameters, FULL_COMMAND_MAX_LEN,
 };
 use alloc::boxed::Box;
 use core::convert::{TryFrom, TryInto};
@@ -151,7 +151,7 @@ pub trait HCIWriter<'w> {
 
     fn send_bytes(&'w mut self, bytes: &[u8]) -> Self::WriteFuture;
 }
-pub struct HCIStream<'s, S: HCIWriter<'s> + HCIReader<'s> + HCIFilterable>{
+pub struct HCIStream<'s, S: HCIWriter<'s> + HCIReader<'s> + HCIFilterable> {
     pub stream: S,
     _lifetime: core::marker::PhantomData<&'s S>,
 }
@@ -160,13 +160,13 @@ impl<'s, S: HCIWriter<'s> + HCIReader<'s> + HCIFilterable> HCIStream<'s, S> {
     pub fn new(stream: S) -> Self {
         Self {
             stream,
-            _lifetime: core::marker::PhantomData
+            _lifetime: core::marker::PhantomData,
         }
     }
-    pub async fn send_command<Cmd: Command>(
+    pub async fn send_command<Cmd: Command, Ret: ReturnParameters>(
         &'s mut self,
         command: Cmd,
-    ) -> Result<Cmd::Return, StreamError> {
+    ) -> Result<Ret, StreamError> {
         let mut buf = [0_u8; FULL_COMMAND_MAX_LEN];
         let len = command.full_len();
         command
@@ -178,31 +178,30 @@ impl<'s, S: HCIWriter<'s> + HCIReader<'s> + HCIFilterable> HCIStream<'s, S> {
         filter.enable_event(EventCode::CommandStatus);
         filter.enable_event(EventCode::CommandComplete);
         filter.enable_event(EventCode::LEMeta);
-        const EVENT_CODE: EventCode = Cmd::Return::EVENT_CODE;
-        if !filter.get_event(EVENT_CODE) {
-            return Err(StreamError::BadEventCode)
+        if !filter.get_event(Ret::EVENT_CODE) {
+            return Err(StreamError::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
         let old_filter = self.stream.get_filter()?;
         self.stream.set_filter(&filter)?;
-        self.stream.send_bytes(&buf[..len]).await?;
+        {
+            self.stream.send_bytes(&buf[..len]).await?;
+        }
 
-        for try_i in 0..HCI_EVENT_READ_TRIES {
-            let event: EventPacket<Box<[u8]>> = self.stream.read_event().await.ok_or(StreamError::StreamClosed)??;
-            match event.event_opcode {
-                EventCode::CommandComplete => {
-
-                },
-                EventCode::CommandStatus => {
-                    if event.event_opcode != EVENT_CODE {
-                        continue;
-                    }
-                    let status =
-                },
-                EventCode::LEMeta => {
-                    
-                },
-                _ => unreachable!("filter should not allow any other event codes")
+        let out = self.read_ret().await;
+        self.stream.set_filter(&old_filter);
+        out
+    }
+    async fn read_ret<Ret: ReturnParameters>(&'s mut self) -> Result<Ret, StreamError> {
+        for _try_i in 0..HCI_EVENT_READ_TRIES {
+            let event: EventPacket<Box<[u8]>> = self
+                .stream
+                .read_event()
+                .await
+                .ok_or(StreamError::StreamClosed)??;
+            if event.event_opcode == Ret::EVENT_CODE {
+                return Ret::unpack_from(event.parameters.as_ref())
+                    .map_err(StreamError::CommandError);
             }
         }
         Err(StreamError::StreamFailed)
@@ -339,16 +338,13 @@ pub mod byte {
             self.next()
         }
     }
-    impl<'w, 'r: 'w, R: AsyncRead + Unpin + AsyncWrite> HCIWriter<'w>
-        for ByteStream<'r, R>
-    {
+    impl<'w, 'r: 'w, R: AsyncRead + Unpin + AsyncWrite> HCIWriter<'w> for ByteStream<'r, R> {
         type WriteFuture = ByteWrite<'w, R>;
         fn send_bytes(&'w mut self, bytes: &[u8]) -> ByteWrite<'w, R> {
             self.clear();
             println!("send");
             ByteWrite::new(self.reader, bytes)
         }
-
     }
 
     pub struct ByteWrite<'w, W: AsyncWrite + Unpin> {
@@ -389,7 +385,6 @@ pub mod byte {
             let len = me.len;
             let pos = &mut me.pos;
             let buf = &me.data[..len];
-            println!("poller pos: {} len: {}", *pos, len);
             while *pos < len {
                 let amount = match Pin::new(&mut *me.writer).poll_write(cx, &buf[*pos..]) {
                     Poll::Ready(result) => match result {
@@ -401,10 +396,8 @@ pub mod byte {
                     },
                     Poll::Pending => return Poll::Pending,
                 };
-                println!("write");
                 *pos += amount;
             }
-            println!("flush");
             match Pin::new(&mut *me.writer).poll_flush(cx) {
                 Poll::Pending => Poll::Pending,
                 Poll::Ready(result) => match result {
