@@ -1,8 +1,8 @@
+pub mod command;
 pub mod event;
 /// HCI Layer is Little Endian.
 pub mod le;
 pub mod link_control;
-pub mod command;
 #[cfg(all(feature = "remote"))]
 pub mod remote;
 #[cfg(all(unix, feature = "std"))]
@@ -276,7 +276,7 @@ impl Opcode {
     pub const fn byte_len() -> usize {
         OPCODE_LEN
     }
-    pub fn pack(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
+    pub fn pack(self, buf: &mut [u8]) -> Result<(), HCIPackError> {
         if buf.len() != OPCODE_LEN {
             Err(HCIPackError::BadLength)
         } else {
@@ -298,7 +298,7 @@ impl Opcode {
     pub const fn nop() -> Opcode {
         Opcode(OGF::NOP, OCF(0))
     }
-    pub fn is_nop(&self) -> bool {
+    pub fn is_nop(self) -> bool {
         self.0 == OGF::NOP
     }
 }

@@ -394,7 +394,7 @@ impl TryFrom<u8> for URIName {
     }
 }
 impl URIName {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             URIName::Aaa => "aaa:",
             URIName::Aaas => "aaas:",

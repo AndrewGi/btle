@@ -156,9 +156,6 @@ pub trait HCIWriter {
         bytes: &[u8],
     ) -> Pin<Box<dyn Future<Output = Result<(), StreamError>> + 'f>>;
 }
-pub struct HCIStream<S: HCIWriter + HCIReader + HCIFilterable> {
-    pub stream: S,
-}
 pub trait HCIReader {
     /// Work around for async in traits. Traits can't return a generic type with a lifetime bound
     /// to the function call (like below). But they can return a dynamic type with the lifetime bound
@@ -167,6 +164,9 @@ pub trait HCIReader {
     fn read_event<'f>(
         self: Pin<&'f mut Self>,
     ) -> Pin<Box<dyn Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>> + 'f>>;
+}
+pub struct HCIStream<S: HCIWriter + HCIReader + HCIFilterable> {
+    pub stream: S,
 }
 pub const HCI_EVENT_READ_TRIES: usize = 10;
 impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
@@ -182,29 +182,35 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
     ) -> Result<Return, StreamError> {
         let mut buf = [0_u8; FULL_COMMAND_MAX_LEN];
         let len = command.full_len();
+        // Pack Command
         command
             .pack_full(&mut buf[..len])
             .map_err(StreamError::CommandError)?;
+        // New Filter
         let mut filter = Filter::default();
         filter.enable_type(PacketType::Command);
         filter.enable_type(PacketType::Event);
-        /*
+
         filter.enable_event(EventCode::CommandStatus);
         filter.enable_event(EventCode::CommandComplete);
         filter.enable_event(EventCode::LEMeta);
-        */
+
         filter.enable_event(Return::EVENT_CODE);
         if !filter.get_event(Return::EVENT_CODE) {
             return Err(StreamError::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
+        // Save Old Filter
         let old_filter = self.as_mut().stream_pinned().as_ref().get_filter()?;
         self.as_mut().stream_pinned().set_filter(&filter)?;
+
+        // Send command Bytes
         self.as_mut()
             .stream_pinned()
             .send_bytes(&buf[..len])
             .await?;
 
+        // Wait for response
         for _try_i in 0..HCI_EVENT_READ_TRIES {
             let event: EventPacket<Box<[u8]>> = self
                 .as_mut()
@@ -218,6 +224,22 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
             }
         }
         Err(StreamError::StreamFailed)
+    }
+}
+impl<S: HCIWriter + HCIReader + HCIFilterable> HCIReader for HCIStream<S> {
+    fn read_event<'f>(
+        self: Pin<&'f mut Self>,
+    ) -> Pin<Box<dyn Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>> + 'f>>
+    {
+        self.stream_pinned().read_event()
+    }
+}
+impl<S: HCIWriter + HCIReader + HCIFilterable> HCIWriter for HCIStream<S> {
+    fn send_bytes<'f>(
+        self: Pin<&'f mut Self>,
+        bytes: &[u8],
+    ) -> Pin<Box<dyn Future<Output = Result<(), StreamError>> + 'f>> {
+        self.stream_pinned().send_bytes(bytes)
     }
 }
 #[cfg(feature = "std")]
@@ -419,7 +441,7 @@ pub mod byte {
         pub fn buf(&self) -> &[u8] {
             &self.data[self.pos..self.len]
         }
-        pub unsafe fn explode_unsafe(
+        unsafe fn explode_unsafe(
             &mut self,
         ) -> (
             &mut Pin<&'w mut W>,
