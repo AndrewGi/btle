@@ -280,7 +280,7 @@ impl Opcode {
         if buf.len() != OPCODE_LEN {
             Err(HCIPackError::BadLength)
         } else {
-            buf[..2].copy_from_slice(&u16::from(*self).to_bytes_le());
+            buf[..2].copy_from_slice(&u16::from(self).to_bytes_le());
             Ok(())
         }
     }
@@ -304,7 +304,7 @@ impl Opcode {
 }
 impl From<Opcode> for u16 {
     fn from(opcode: Opcode) -> Self {
-        (opcode.1).0 & (u16::from(u8::from(opcode.0)) << 10)
+        (opcode.1).0 | (u16::from(u8::from(opcode.0)) << 10)
     }
 }
 impl TryFrom<u16> for Opcode {

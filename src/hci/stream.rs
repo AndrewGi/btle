@@ -74,7 +74,9 @@ impl Filter {
         out[..4].copy_from_slice(&self.type_mask.to_le_bytes()[..]);
         out[4..8].copy_from_slice(&self.event_mask[0].to_le_bytes()[..]);
         out[8..12].copy_from_slice(&self.event_mask[1].to_le_bytes()[..]);
-        out[12..14].copy_from_slice(&u16::from(self.opcode).to_le_bytes()[..]);
+        self.opcode
+            .pack(&mut out[12..14])
+            .expect("hardcoded array length");
         out
     }
     pub fn unpack(bytes: &[u8]) -> Option<Self> {
@@ -200,6 +202,7 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
             return Err(StreamError::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
+
         // Save Old Filter
         let old_filter = self.as_mut().stream_pinned().as_ref().get_filter()?;
         self.as_mut().stream_pinned().set_filter(&filter)?;
@@ -469,7 +472,7 @@ pub mod byte {
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
             let (writer, buf, pos, len) = self.explode_mut();
             while *pos < len {
-                let amount = match writer.as_mut().poll_write(cx, &buf[*pos..]) {
+                let amount = match writer.as_mut().poll_write(cx, &buf[*pos..len]) {
                     Poll::Ready(result) => match result {
                         Ok(amount) => amount,
                         Err(e) => {
