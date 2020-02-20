@@ -248,7 +248,9 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIWriter for HCIStream<S> {
 #[cfg(feature = "std")]
 pub mod byte {
     use crate::hci::event::EventCode;
-    use crate::hci::stream::{Filter, HCIFilterable, HCIReader, HCIWriter, StreamError};
+    use crate::hci::stream::{
+        Filter, HCIFilterable, HCIReader, HCIWriter, PacketType, StreamError,
+    };
     use crate::hci::FULL_COMMAND_MAX_LEN;
     use alloc::boxed::Box;
     use alloc::vec::Vec;
@@ -262,8 +264,11 @@ pub mod byte {
     use futures_core::Stream;
     use futures_io::{AsyncRead, AsyncWrite};
 
-    const EVENT_HEADER_LEN: usize = 2;
+    const EVENT_HEADER_LEN: usize = 3;
 
+    /// HCI Byte Stream Reader. Implements [`HCIReader`] for async byte streams
+    /// ([`futures_io::AsyncRead`]). If the stream is writable ([`futures_io::AsyncWrite`]),
+    /// [`HCIWriter`] will be implemented for it. Look at [`ByteWrite`]
     pub struct ByteStream<R: AsyncRead> {
         reader: R,
         pos: usize,
@@ -271,6 +276,7 @@ pub mod byte {
         parameters: Option<Box<[u8]>>,
     }
     impl<R: AsyncRead> ByteStream<R> {
+        /// Wraps a raw byte stream into a HCI byte stream.
         pub fn new(reader: R) -> Self {
             Self {
                 reader,
@@ -296,6 +302,9 @@ pub mod byte {
         pub fn reader_pinned(self: Pin<&Self>) -> Pin<&R> {
             unsafe { self.map_unchecked(|s| &s.reader) }
         }
+        /// Explode the struct into multiple mutable references. Unsafe because it structurally pins
+        /// `reader` in place, even if `self` isn't `Pin`. See [`Self::explode_mut`] for the safe
+        /// version.
         unsafe fn explode_unsafe(
             &mut self,
         ) -> (
@@ -311,6 +320,7 @@ pub mod byte {
                 &mut self.parameters,
             )
         }
+        /// Splits the structure into multiple mutable references to make `Self::poll_next` easier.
         fn explode_mut(
             self: Pin<&mut Self>,
         ) -> (
@@ -351,12 +361,14 @@ pub mod byte {
                 }
                 *pos += amount;
             }
-
-            let opcode = match EventCode::try_from(header_buf[0]) {
-                Ok(opcode) => opcode,
+            if header_buf[0] != u8::from(PacketType::Event) {
+                unimplemented!("ACL Event and other non-regular HCI event are not handled yet")
+            }
+            let event_code = match EventCode::try_from(header_buf[1]) {
+                Ok(event_code) => event_code,
                 Err(_) => return Poll::Ready(Some(Err(StreamError::BadOpcode))),
             };
-            let len = usize::from(header_buf[1]);
+            let len = usize::from(header_buf[2]);
             let make_buf = || {
                 let mut buf = Vec::with_capacity(len);
                 buf.resize(len, 0u8);
@@ -391,7 +403,7 @@ pub mod byte {
                 *pos += amount;
             }
             Poll::Ready(Some(Ok(EventPacket::new(
-                opcode,
+                event_code,
                 parameters_op
                     .take()
                     .expect("buffer just filled by poll_read"),

@@ -1,6 +1,6 @@
-use crate::hci::{ErrorCode, HCIPackError, Opcode, OPCODE_LEN, EVENT_CODE_LEN, HCIConversionError};
+use crate::hci::stream::PacketType;
+use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
 use core::convert::TryFrom;
-
 
 /// HCI Event Code. 8-bit code corresponding to an HCI Event. Check the Bluetooth Core Spec for more.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -156,23 +156,27 @@ impl TryFrom<u8> for EventCode {
 pub trait Event {
     const CODE: EventCode;
     fn byte_len(&self) -> usize;
+    fn full_len(&self) -> usize {
+        self.byte_len() + EVENT_CODE_LEN + 2
+    }
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
     fn pack_full(&self, buf: &mut [u8]) -> Result<usize, HCIPackError> {
-        if buf.len() != self.byte_len() + EVENT_CODE_LEN + 1 {
+        let full = self.full_len();
+        if buf.len() != full {
             Err(HCIPackError::BadLength)
         } else {
-            self.pack_into(&mut buf[2..])?;
-            buf[0] = Self::CODE.into();
-            buf[1] =
+            self.pack_into(&mut buf[3..])?;
+            buf[0] = PacketType::Event.into();
+            buf[1] = Self::CODE.into();
+            buf[2] =
                 u8::try_from(self.byte_len()).expect("events can only have 0xFF parameter bytes");
-            Ok(self.byte_len() + EVENT_CODE_LEN + 1)
+            Ok(full)
         }
     }
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
-        where
-            Self: Sized;
+    where
+        Self: Sized;
 }
-
 
 /// Unprocessed HCI Event Packet
 pub struct EventPacket<Storage: AsRef<[u8]>> {
@@ -201,8 +205,8 @@ pub trait ReturnParameters {
     const EVENT_CODE: EventCode;
     fn byte_len(&self) -> usize;
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
-        where
-            Self: Sized;
+    where
+        Self: Sized;
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
 }
 
@@ -215,7 +219,7 @@ impl StatusReturn {
     }
 }
 impl ReturnParameters for StatusReturn {
-    const EVENT_CODE: EventCode = EventCode::CommandComplete;
+    const EVENT_CODE: EventCode = EventCode::CommandStatus;
 
     fn byte_len(&self) -> usize {
         Self::byte_len()
@@ -240,7 +244,6 @@ impl ReturnParameters for StatusReturn {
         }
     }
 }
-
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct CommandComplete {
