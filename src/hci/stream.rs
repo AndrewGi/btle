@@ -39,7 +39,7 @@ impl TryFrom<u8> for PacketType {
     }
 }
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
-pub enum StreamError {
+pub enum Error {
     CommandError(HCIPackError),
     BadOpcode,
     BadEventCode,
@@ -80,9 +80,7 @@ impl Filter {
         out
     }
     pub fn unpack(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() != FILTER_LEN {
-            None
-        } else {
+        if bytes.len() == FILTER_LEN {
             Some(Self {
                 opcode: Opcode::unpack(&bytes[12..14]).ok()?,
                 type_mask: u32::from_le_bytes(
@@ -93,49 +91,51 @@ impl Filter {
                     u32::from_le_bytes((&bytes[8..12]).try_into().expect("hardcoded array length")),
                 ],
             })
+        } else {
+            None
         }
     }
     pub fn enable_event(&mut self, event: EventCode) {
         let event = u32::from(event);
         assert!(event < 64);
         if event < 32 {
-            self.event_mask[0] |= 1u32 << event;
+            self.event_mask[0] |= 1_u32 << event;
         } else {
-            self.event_mask[1] |= 1u32 << (event - 32);
+            self.event_mask[1] |= 1_u32 << (event - 32);
         }
     }
     pub fn disable_event(&mut self, event: EventCode) {
         let event = u32::from(event);
         assert!(event < 64);
         if event < 32 {
-            self.event_mask[0] &= !(1u32 << event);
+            self.event_mask[0] &= !(1_u32 << event);
         } else {
-            self.event_mask[1] &= !(1u32 << (event - 32));
+            self.event_mask[1] &= !(1_u32 << (event - 32));
         }
     }
     pub fn get_event(&self, event: EventCode) -> bool {
         let event = u32::from(event);
         assert!(event < 64);
         if event < 32 {
-            self.event_mask[0] & (1u32 << event) != 0
+            self.event_mask[0] & (1_u32 << event) != 0
         } else {
-            self.event_mask[1] & (1u32 << (event - 32)) != 0
+            self.event_mask[1] & (1_u32 << (event - 32)) != 0
         }
     }
     pub fn enable_type(&mut self, packet_type: PacketType) {
         let packet_type = packet_type as u32;
         assert!(packet_type < 32);
-        self.type_mask |= 1u32 << packet_type;
+        self.type_mask |= 1_u32 << packet_type;
     }
     pub fn disable_type(&mut self, packet_type: PacketType) {
         let packet_type = packet_type as u32;
         assert!(packet_type < 32);
-        self.type_mask &= !(1u32 << packet_type);
+        self.type_mask &= !(1_u32 << packet_type);
     }
     pub fn get_type(&self, packet_type: PacketType) -> bool {
         let packet_type = packet_type as u32;
         assert!(packet_type < 32);
-        self.type_mask & (1u32 << packet_type) != 0
+        self.type_mask & (1_u32 << packet_type) != 0
     }
     pub fn opcode(&self) -> Opcode {
         self.opcode
@@ -145,8 +145,8 @@ impl Filter {
     }
 }
 pub trait HCIFilterable {
-    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), StreamError>;
-    fn get_filter(self: Pin<&Self>) -> Result<Filter, StreamError>;
+    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error>;
+    fn get_filter(self: Pin<&Self>) -> Result<Filter, Error>;
 }
 pub trait HCIWriter {
     /// Work around for async in traits. Traits can't return a generic type with a lifetime bound
@@ -156,22 +156,22 @@ pub trait HCIWriter {
     fn send_bytes<'f>(
         self: Pin<&'f mut Self>,
         bytes: &[u8],
-    ) -> Pin<Box<dyn Future<Output = Result<(), StreamError>> + 'f>>;
+    ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'f>>;
 }
+type ReadEventFuture<'f> =
+    Pin<Box<dyn Future<Output = Option<Result<EventPacket<Box<[u8]>>, Error>>> + 'f>>;
 pub trait HCIReader {
     /// Work around for async in traits. Traits can't return a generic type with a lifetime bound
     /// to the function call (like below). But they can return a dynamic type with the lifetime bound
     /// to the function call. Sadly, this work around requires boxing the return value which
     /// is non-zero overhead.
-    fn read_event<'f>(
-        self: Pin<&'f mut Self>,
-    ) -> Pin<Box<dyn Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>> + 'f>>;
+    fn read_event<'f>(self: Pin<&'f mut Self>) -> ReadEventFuture;
 }
-pub struct HCIStream<S: HCIWriter + HCIReader + HCIFilterable> {
+pub struct Stream<S: HCIWriter + HCIReader + HCIFilterable> {
     pub stream: S,
 }
 pub const HCI_EVENT_READ_TRIES: usize = 10;
-impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
+impl<S: HCIWriter + HCIReader + HCIFilterable> Stream<S> {
     pub fn new(stream: S) -> Self {
         Self { stream }
     }
@@ -181,13 +181,13 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
     pub async fn send_command<Cmd: Command, Return: ReturnParameters>(
         mut self: Pin<&mut Self>,
         command: Cmd,
-    ) -> Result<Return, StreamError> {
+    ) -> Result<Return, Error> {
         let mut buf = [0_u8; FULL_COMMAND_MAX_LEN];
         let len = command.full_len();
         // Pack Command
         command
             .pack_full(&mut buf[..len])
-            .map_err(StreamError::CommandError)?;
+            .map_err(Error::CommandError)?;
         // New Filter
         let mut filter = Filter::default();
         filter.enable_type(PacketType::Command);
@@ -199,7 +199,7 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
 
         filter.enable_event(Return::EVENT_CODE);
         if !filter.get_event(Return::EVENT_CODE) {
-            return Err(StreamError::BadEventCode);
+            return Err(Error::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
 
@@ -220,40 +220,36 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> HCIStream<S> {
                 .stream_pinned()
                 .read_event()
                 .await
-                .ok_or(StreamError::StreamClosed)??;
+                .ok_or(Error::StreamClosed)??;
             if event.event_code() == Return::EVENT_CODE {
                 self.stream_pinned().set_filter(&old_filter)?;
-                return Return::unpack_from(event.parameters()).map_err(StreamError::CommandError);
+                return Return::unpack_from(event.parameters()).map_err(Error::CommandError);
             }
         }
-        Err(StreamError::StreamFailed)
+        Err(Error::StreamFailed)
     }
 }
-impl<S: HCIWriter + HCIReader + HCIFilterable> HCIReader for HCIStream<S> {
-    fn read_event<'f>(
-        self: Pin<&'f mut Self>,
-    ) -> Pin<Box<dyn Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>> + 'f>>
-    {
+impl<S: HCIWriter + HCIReader + HCIFilterable> HCIReader for Stream<S> {
+    fn read_event<'f>(self: Pin<&'f mut Self>) -> ReadEventFuture<'f> {
         self.stream_pinned().read_event()
     }
 }
-impl<S: HCIWriter + HCIReader + HCIFilterable> HCIWriter for HCIStream<S> {
+impl<S: HCIWriter + HCIReader + HCIFilterable> HCIWriter for Stream<S> {
     fn send_bytes<'f>(
         self: Pin<&'f mut Self>,
         bytes: &[u8],
-    ) -> Pin<Box<dyn Future<Output = Result<(), StreamError>> + 'f>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'f>> {
         self.stream_pinned().send_bytes(bytes)
     }
 }
 #[cfg(feature = "std")]
-pub mod byte {
+pub mod byte_stream {
     use crate::hci::event::EventCode;
     use crate::hci::stream::{
-        Filter, HCIFilterable, HCIReader, HCIWriter, PacketType, StreamError,
+        Error, Filter, HCIFilterable, HCIReader, HCIWriter, PacketType, ReadEventFuture,
     };
     use crate::hci::FULL_COMMAND_MAX_LEN;
     use alloc::boxed::Box;
-    use alloc::vec::Vec;
     use core::convert::TryFrom;
     use core::pin::Pin;
     use core::task::Poll;
@@ -285,7 +281,7 @@ pub mod byte {
                 parameters: None,
             }
         }
-        /// Clear the Read state from the ByteStream.
+        /// Clear the Read state from the `ByteStream`.
         /// If any message is in the process of being received, it will lose all that data.
         pub fn clear(self: Pin<&mut Self>) {
             // Safe because none of these are structually pinned.
@@ -333,17 +329,17 @@ pub mod byte {
         }
     }
     impl<R: AsyncRead + HCIFilterable> HCIFilterable for ByteStream<R> {
-        fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), StreamError> {
+        fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
             self.reader_pinned_mut().set_filter(filter)
         }
 
-        fn get_filter(self: Pin<&Self>) -> Result<Filter, StreamError> {
+        fn get_filter(self: Pin<&Self>) -> Result<Filter, Error> {
             self.reader_pinned().get_filter()
         }
     }
 
     impl<R: AsyncRead> Stream for ByteStream<R> {
-        type Item = Result<EventPacket<Box<[u8]>>, StreamError>;
+        type Item = Result<EventPacket<Box<[u8]>>, Error>;
 
         fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             let (mut reader, pos, header_buf, parameters_op) = self.explode_mut();
@@ -352,7 +348,7 @@ pub mod byte {
                 let amount = match reader.as_mut().poll_read(cx, &mut header_buf[*pos..]) {
                     Poll::Ready(r) => match r {
                         Ok(a) => a,
-                        Err(_) => return Poll::Ready(Some(Err(StreamError::IOError))),
+                        Err(_) => return Poll::Ready(Some(Err(Error::IOError))),
                     },
                     Poll::Pending => return Poll::Pending,
                 };
@@ -366,14 +362,10 @@ pub mod byte {
             }
             let event_code = match EventCode::try_from(header_buf[1]) {
                 Ok(event_code) => event_code,
-                Err(_) => return Poll::Ready(Some(Err(StreamError::BadOpcode))),
+                Err(_) => return Poll::Ready(Some(Err(Error::BadOpcode))),
             };
             let len = usize::from(header_buf[2]);
-            let make_buf = || {
-                let mut buf = Vec::with_capacity(len);
-                buf.resize(len, 0u8);
-                buf.into_boxed_slice()
-            };
+            let make_buf = || vec![0; len].into_boxed_slice();
 
             let buf = {
                 if let Some(buf) = parameters_op {
@@ -393,7 +385,7 @@ pub mod byte {
                 {
                     Poll::Ready(r) => match r {
                         Ok(a) => a,
-                        Err(_) => return Poll::Ready(Some(Err(StreamError::IOError))),
+                        Err(_) => return Poll::Ready(Some(Err(Error::IOError))),
                     },
                     Poll::Pending => return Poll::Pending,
                 };
@@ -411,10 +403,7 @@ pub mod byte {
         }
     }
     impl<R: AsyncRead> HCIReader for ByteStream<R> {
-        fn read_event<'f>(
-            mut self: Pin<&'f mut Self>,
-        ) -> Pin<Box<dyn Future<Output = Option<Result<EventPacket<Box<[u8]>>, StreamError>>> + 'f>>
-        {
+        fn read_event<'f>(mut self: Pin<&'f mut Self>) -> ReadEventFuture<'f> {
             Box::pin(futures_util::future::poll_fn(move |cx| {
                 self.as_mut().poll_next(cx)
             }))
@@ -424,7 +413,7 @@ pub mod byte {
         fn send_bytes<'f>(
             mut self: Pin<&'f mut Self>,
             bytes: &[u8],
-        ) -> Pin<Box<dyn Future<Output = Result<(), StreamError>> + 'f>> {
+        ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'f>> {
             self.as_mut().clear();
             Box::pin(ByteWrite::new(self.reader_pinned_mut(), bytes))
         }
@@ -479,7 +468,7 @@ pub mod byte {
         }
     }
     impl<'w, W: AsyncWrite> Future for ByteWrite<'w, W> {
-        type Output = Result<(), StreamError>;
+        type Output = Result<(), Error>;
 
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
             let (writer, buf, pos, len) = self.explode_mut();
@@ -489,7 +478,7 @@ pub mod byte {
                         Ok(amount) => amount,
                         Err(e) => {
                             eprintln!("error: {:?}", e);
-                            return Poll::Ready(Err(StreamError::IOError));
+                            return Poll::Ready(Err(Error::IOError));
                         }
                     },
                     Poll::Pending => return Poll::Pending,
@@ -500,11 +489,11 @@ pub mod byte {
                 Poll::Pending => Poll::Pending,
                 Poll::Ready(result) => match result {
                     Ok(_) => Poll::Ready(Ok(())),
-                    Err(_) => Poll::Ready(Err(StreamError::IOError)),
+                    Err(_) => Poll::Ready(Err(Error::IOError)),
                 },
             }
         }
     }
 }
 #[cfg(feature = "std")]
-pub use byte::{ByteStream, ByteWrite};
+pub use byte_stream::{ByteStream, ByteWrite};

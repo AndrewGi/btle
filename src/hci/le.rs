@@ -1,7 +1,7 @@
-use crate::hci::{HCIConversionError, HCIPackError, Opcode, OCF, OGF};
-use core::convert::{TryFrom, TryInto};
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
+use crate::hci::{HCIConversionError, HCIPackError, Opcode, OCF, OGF};
+use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[repr(u16)]
@@ -77,7 +77,7 @@ impl TryFrom<OCF> for LEControllerOpcode {
     }
 }
 impl LEControllerOpcode {
-    pub const fn ogf(self) -> OGF {
+    pub const fn ogf() -> OGF {
         OGF::LEController
     }
 }
@@ -160,9 +160,7 @@ impl Command for SetScanEnable {
     where
         Self: Sized,
     {
-        if buf.len() != 2 {
-            Err(HCIPackError::BadLength)
-        } else {
+        if buf.len() == 2 {
             let is_enabled = match buf[0] {
                 0 => false,
                 1 => true,
@@ -177,6 +175,8 @@ impl Command for SetScanEnable {
                 is_enabled,
                 filter_duplicates,
             })
+        } else {
+            Err(HCIPackError::BadLength)
         }
     }
 }
@@ -202,13 +202,13 @@ impl Command for SetAdvertisingData {
     }
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if buf.len() != self.byte_len() {
-            Err(HCIPackError::BadLength)
-        } else {
+        if buf.len() == self.byte_len() {
             buf[0] = self.len;
             let l = usize::from(self.len);
             buf[1..][..l].copy_from_slice(&self.data[..l]);
             Ok(())
+        } else {
+            Err(HCIPackError::BadLength)
         }
     }
 

@@ -228,14 +228,12 @@ impl HCISocket {
     }
 }
 impl HCIFilterable for HCISocket {
-    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), StreamError> {
-        self.set_socket_filter(filter)
-            .ok()
-            .ok_or(StreamError::IOError)
+    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
+        self.set_socket_filter(filter).ok().ok_or(Error::IOError)
     }
 
-    fn get_filter(self: Pin<&Self>) -> Result<Filter, StreamError> {
-        self.get_socket_filter().ok().ok_or(StreamError::IOError)
+    fn get_filter(self: Pin<&Self>) -> Result<Filter, Error> {
+        self.get_socket_filter().ok().ok_or(Error::IOError)
     }
 }
 fn hci_to_socket_error(err: nix::Error) -> HCISocketError {
@@ -305,11 +303,10 @@ impl Manager {
 #[cfg(feature = "bluez_async")]
 pub mod async_socket {
     use super::HCISocket;
-    use crate::hci::stream::{Filter, HCIFilterable, StreamError};
+    use crate::hci::stream::{Error, Filter, HCIFilterable};
     use core::convert::TryFrom;
     use core::pin::Pin;
     use core::task::{Context, Poll};
-    use futures_io::Error;
     use std::os::unix::io::AsRawFd;
     use tokio::io::{AsyncRead, AsyncWrite};
     impl TryFrom<HCISocket> for AsyncHCISocket {
@@ -325,16 +322,16 @@ pub mod async_socket {
     }
     pub struct AsyncHCISocket(pub tokio::net::UnixStream);
     impl HCIFilterable for AsyncHCISocket {
-        fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), StreamError> {
+        fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
             HCISocket::set_filter_raw(self.0.as_raw_fd(), filter)
                 .ok()
-                .ok_or(StreamError::IOError)
+                .ok_or(Error::IOError)
         }
 
-        fn get_filter(self: Pin<&Self>) -> Result<Filter, StreamError> {
+        fn get_filter(self: Pin<&Self>) -> Result<Filter, Error> {
             HCISocket::get_filter_raw(self.0.as_raw_fd())
                 .ok()
-                .ok_or(StreamError::IOError)
+                .ok_or(Error::IOError)
         }
     }
     impl futures_io::AsyncRead for AsyncHCISocket {
@@ -351,20 +348,26 @@ pub mod async_socket {
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             buf: &[u8],
-        ) -> Poll<Result<usize, Error>> {
+        ) -> Poll<Result<usize, std::io::Error>> {
             Pin::new(&mut self.0).poll_write(cx, buf)
         }
 
-        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), std::io::Error>> {
             Pin::new(&mut self.0).poll_flush(cx)
         }
 
-        fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        fn poll_close(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), std::io::Error>> {
             Pin::new(&mut self.0).poll_shutdown(cx)
         }
     }
 }
-use crate::hci::stream::{Filter, HCIFilterable, StreamError, FILTER_LEN};
+use crate::hci::stream::{Error, Filter, HCIFilterable, FILTER_LEN};
 use crate::BTAddress;
 #[cfg(feature = "bluez_async")]
 pub use async_socket::AsyncHCISocket;

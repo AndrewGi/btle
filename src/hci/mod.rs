@@ -247,7 +247,7 @@ impl TryFrom<u8> for OGF {
     }
 }
 pub const OCF_MAX: u16 = (1 << 10) - 1;
-/// 10 bit OCF (OpCode Command Field)
+/// 10 bit OCF (`Opcode` Command Field)
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 pub struct OCF(u16);
 impl OCF {
@@ -276,23 +276,28 @@ impl Opcode {
     pub const fn byte_len() -> usize {
         OPCODE_LEN
     }
+    /// # Errors
+    /// returns `HCIPackError::BadLength` if `buf.len() != OPCODE_LEN`.
     pub fn pack(self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if buf.len() != OPCODE_LEN {
-            Err(HCIPackError::BadLength)
-        } else {
+        if OPCODE_LEN == buf.len() {
             buf[..2].copy_from_slice(&u16::from(self).to_bytes_le());
             Ok(())
+        } else {
+            Err(HCIPackError::BadLength)
         }
     }
+    /// # Errors
+    /// returns `HCIPackError::BadLength` if `buf.len() != OPCODE_LEN`.
+    /// returns `HCIPackError::BadBytes` if `buf` doesn't contain a value opcode.
     pub fn unpack(buf: &[u8]) -> Result<Opcode, HCIPackError> {
-        if buf.len() != OPCODE_LEN {
-            Err(HCIPackError::BadLength)
-        } else {
+        if buf.len() == OPCODE_LEN {
             Ok(u16::from_bytes_le(&buf)
                 .expect("length checked above")
                 .try_into()
                 .ok()
                 .ok_or(HCIPackError::BadBytes)?)
+        } else {
+            Err(HCIPackError::BadLength)
         }
     }
     pub const fn nop() -> Opcode {

@@ -128,10 +128,10 @@ impl AdStructure {
     }
     pub fn data(&self) -> &[u8] {
         match self {
-            AdStructure::MeshPDU(p) => p.as_ref(),
-            AdStructure::MeshBeacon(b) => b.as_ref(),
-            AdStructure::MeshProvision(p) => p.as_ref(),
-            Unknown(_, b) => b.as_ref(),
+            AdStructure::MeshPDU(b)
+            | AdStructure::MeshBeacon(b)
+            | AdStructure::MeshProvision(b)
+            | Unknown(_, b) => b.as_ref(),
         }
     }
     pub fn ad_type(&self) -> AdType {
@@ -145,10 +145,10 @@ impl AdStructure {
     pub fn len(&self) -> usize {
         // +2 for the ad_type and len u8's
         match self {
-            AdStructure::MeshPDU(b) => b.len() + 2,
-            AdStructure::MeshBeacon(b) => b.len() + 2,
-            AdStructure::MeshProvision(b) => b.len() + 2,
-            Unknown(_, b) => b.len() + 2,
+            AdStructure::MeshPDU(b)
+            | AdStructure::MeshBeacon(b)
+            | AdStructure::MeshProvision(b)
+            | Unknown(_, b) => b.len() + 2,
         }
     }
 }
@@ -272,7 +272,7 @@ impl<'a> Iterator for AdStructureIterator<'a> {
         if self.data.len() < 2 {
             return None;
         }
-        let d = mem::replace(&mut self.data, &mut []);
+        let d = mem::replace(&mut self.data, &[]);
         let len = usize::from(d[0]);
         let (data, rest) = d.split_at(len + 1);
         self.data = rest;

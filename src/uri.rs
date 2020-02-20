@@ -2,7 +2,7 @@ use core::convert::TryFrom;
 use core::fmt::{Display, Error, Formatter};
 use core::str::FromStr;
 
-/// URI Name type based on https://www.bluetooth.com/specifications/assigned-numbers/uri-scheme-name-string-mapping/.
+/// URI Name type based on [Bluetooth Assigned Numbers](https://www.bluetooth.com/specifications/assigned-numbers/uri-scheme-name-string-mapping/).
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[repr(u8)]
 pub enum URIName {

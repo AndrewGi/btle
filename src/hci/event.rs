@@ -274,9 +274,7 @@ impl Event for CommandComplete {
     where
         Self: Sized,
     {
-        if buf.len() != COMMAND_COMPLETE_LEN {
-            Err(HCIPackError::BadLength)
-        } else {
+        if buf.len() == COMMAND_COMPLETE_LEN {
             let opcode = Opcode::unpack(&buf[2..4])?;
             let status = ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::BadBytes)?;
             Ok(CommandComplete {
@@ -284,6 +282,8 @@ impl Event for CommandComplete {
                 num_command_packets: buf[1],
                 opcode,
             })
+        } else {
+            Err(HCIPackError::BadLength)
         }
     }
 }
@@ -317,9 +317,7 @@ impl Event for CommandStatus {
     where
         Self: Sized,
     {
-        if buf.len() != COMMAND_STATUS_LEN {
-            Err(HCIPackError::BadLength)
-        } else {
+        if buf.len() == COMMAND_STATUS_LEN {
             let opcode = Opcode::unpack(&buf[2..4])?;
             let status = ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::BadBytes)?;
             Ok(CommandStatus {
@@ -327,6 +325,8 @@ impl Event for CommandStatus {
                 num_command_packets: buf[1],
                 opcode,
             })
+        } else {
+            Err(HCIPackError::BadLength)
         }
     }
 }

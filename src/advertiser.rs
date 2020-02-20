@@ -6,7 +6,9 @@ pub trait Scanner<Sink: ScannerSink> {
     fn take_sink(&mut self, sink: Sink);
 }
 
-pub enum AdvertiserError {}
+pub enum AdvertiserError {
+    IOError,
+}
 pub trait Advertiser {
     fn advertise(&mut self, advertisement: &RawAdvertisement) -> Result<(), AdvertiserError>;
 }
