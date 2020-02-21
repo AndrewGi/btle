@@ -272,13 +272,13 @@ pub mod byte_stream {
     /// HCI Byte Stream Reader. Implements [`HCIReader`] for async byte streams
     /// ([`futures_io::AsyncRead`]). If the stream is writable ([`futures_io::AsyncWrite`]),
     /// [`HCIWriter`] will be implemented for it. Look at [`ByteWrite`]
-    pub struct ByteRead<R: AsyncRead, Buf: Storage>> {
-        reader: Pin<R,
+    pub struct ByteRead<'r, R: AsyncRead, Buf: Storage>> {
+        reader: Pin<&'r R>,
         pos: usize,
         header_buf: [u8; EVENT_HEADER_LEN],
         parameters: Option<Buf>,
     }
-    impl<R: AsyncRead, Buf: Storage> ByteRead<R, Buf> {
+    impl<'r, R: AsyncRead, Buf: Storage> ByteRead<'r, R, Buf> {
         /// Wraps a raw byte stream into a HCI byte stream.
         pub fn new(reader: R) -> Self {
             Self {
