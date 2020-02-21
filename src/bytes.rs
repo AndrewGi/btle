@@ -192,11 +192,11 @@ impl ToFromBytesEndian for bool {
 /// Unlike other static buffers, this does NOT reallocate if you out grow the internal buffer. If
 /// you try to request more bytes than its able to store, it will panic.  
 #[derive(Copy, Clone, Default)]
-pub struct StaticBuf<ArrayBuf: AsRef<[u8]> + Default + Copy> {
+pub struct StaticBuf<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> {
     buf: ArrayBuf,
     len: usize,
 }
-impl<ArrayBuf: AsRef<[u8]> + Default + Copy> StaticBuf<ArrayBuf> {
+impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> StaticBuf<ArrayBuf> {
     /// Returns the maximum size the `StaticBuf` can hold.
     /// # Examples
     /// ```
@@ -232,7 +232,7 @@ impl<ArrayBuf: AsRef<[u8]> + Default + Copy> StaticBuf<ArrayBuf> {
         self.len = new_size;
     }
 }
-impl<ArrayBuf: AsRef<[u8]> + Default + Copy> AsRef<[u8]> for StaticBuf<ArrayBuf> {
+impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> AsRef<[u8]> for StaticBuf<ArrayBuf> {
     fn as_ref(&self) -> &[u8] {
         &self.buf.as_ref()[..self.len]
     }
@@ -242,7 +242,9 @@ impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> AsMut<[u8]> for Stati
         &mut self.buf.as_mut()[..self.len]
     }
 }
-impl<ArrayBuf: AsRef<[u8]> + Default + Copy> ops::Index<ops::RangeFull> for StaticBuf<ArrayBuf> {
+impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> ops::Index<ops::RangeFull>
+    for StaticBuf<ArrayBuf>
+{
     type Output = [u8];
 
     fn index(&self, _index: RangeFull) -> &Self::Output {
@@ -256,7 +258,9 @@ impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> ops::IndexMut<ops::Ra
         self.as_mut()
     }
 }
-impl<ArrayBuf: AsRef<[u8]> + Default + Copy> ops::Index<usize> for StaticBuf<ArrayBuf> {
+impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> ops::Index<usize>
+    for StaticBuf<ArrayBuf>
+{
     type Output = u8;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -271,7 +275,7 @@ impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> ops::IndexMut<usize>
         &mut self.as_mut()[index]
     }
 }
-impl<ArrayBuf: AsRef<[u8]> + Default + Copy> Storage for StaticBuf<ArrayBuf> {
+impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> Storage for StaticBuf<ArrayBuf> {
     fn with_size(size: usize) -> Self
     where
         Self: Sized,
@@ -295,7 +299,7 @@ impl<ArrayBuf: AsRef<[u8]> + Default + Copy> Storage for StaticBuf<ArrayBuf> {
 
 /// Objects that store and own bytes (`Box<[u8]>`, `Vec<u8>`, `StaticBuf<[u8; 32]>`, etc).
 /// This allows for generic byte storage types for byte buffers.
-pub trait Storage: AsRef<[u8]> {
+pub trait Storage: AsRef<[u8]> + AsMut<[u8]> {
     fn with_size(size: usize) -> Self
     where
         Self: Sized;

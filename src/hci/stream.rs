@@ -158,22 +158,26 @@ pub trait HCIWriter {
         bytes: &[u8],
     ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'f>>;
 }
-type ReadEventFuture<'f> =
-    Pin<Box<dyn Future<Output = Option<Result<EventPacket<Box<[u8]>>, Error>>> + 'f>>;
-pub trait HCIReader {
+type ReadEventFuture<'f, Buf> =
+    Pin<Box<dyn Future<Output = Option<Result<EventPacket<Buf>, Error>>> + 'f>>;
+pub trait HCIReader<Buf: Storage> {
     /// Work around for async in traits. Traits can't return a generic type with a lifetime bound
     /// to the function call (like below). But they can return a dynamic type with the lifetime bound
     /// to the function call. Sadly, this work around requires boxing the return value which
     /// is non-zero overhead.
-    fn read_event<'f>(self: Pin<&'f mut Self>) -> ReadEventFuture;
+    fn read_event<'f>(self: Pin<&'f mut Self>) -> ReadEventFuture<'f, Buf>;
 }
-pub struct Stream<S: HCIWriter + HCIReader + HCIFilterable> {
+pub struct Stream<S: HCIWriter + HCIReader<Buf> + HCIFilterable, Buf: Storage> {
     pub stream: S,
+    _marker: core::marker::PhantomData<Buf>,
 }
 pub const HCI_EVENT_READ_TRIES: usize = 10;
-impl<S: HCIWriter + HCIReader + HCIFilterable> Stream<S> {
+impl<Buf: Storage, S: HCIWriter + HCIReader<Buf> + HCIFilterable> Stream<S, Buf> {
     pub fn new(stream: S) -> Self {
-        Self { stream }
+        Self {
+            stream,
+            _marker: core::marker::PhantomData,
+        }
     }
     pub fn stream_pinned(self: Pin<&mut Self>) -> Pin<&mut S> {
         unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().stream) }
@@ -215,7 +219,7 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> Stream<S> {
 
         // Wait for response
         for _try_i in 0..HCI_EVENT_READ_TRIES {
-            let event: EventPacket<Box<[u8]>> = self
+            let event: EventPacket<Buf> = self
                 .as_mut()
                 .stream_pinned()
                 .read_event()
@@ -229,12 +233,14 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> Stream<S> {
         Err(Error::StreamFailed)
     }
 }
-impl<S: HCIWriter + HCIReader + HCIFilterable> HCIReader for Stream<S> {
-    fn read_event<'f>(self: Pin<&'f mut Self>) -> ReadEventFuture<'f> {
+impl<Buf: Storage, S: HCIWriter + HCIReader<Buf> + HCIFilterable> HCIReader<Buf>
+    for Stream<S, Buf>
+{
+    fn read_event<'f>(self: Pin<&'f mut Self>) -> ReadEventFuture<'f, Buf> {
         self.stream_pinned().read_event()
     }
 }
-impl<S: HCIWriter + HCIReader + HCIFilterable> HCIWriter for Stream<S> {
+impl<Buf: Storage, S: HCIWriter + HCIReader<Buf> + HCIFilterable> HCIWriter for Stream<S, Buf> {
     fn send_bytes<'f>(
         self: Pin<&'f mut Self>,
         bytes: &[u8],
@@ -254,6 +260,7 @@ pub mod byte_stream {
     use core::pin::Pin;
     use core::task::Poll;
 
+    use crate::bytes::Storage;
     use crate::hci::event::EventPacket;
     use core::future::Future;
     use core::task::Context;
@@ -265,13 +272,13 @@ pub mod byte_stream {
     /// HCI Byte Stream Reader. Implements [`HCIReader`] for async byte streams
     /// ([`futures_io::AsyncRead`]). If the stream is writable ([`futures_io::AsyncWrite`]),
     /// [`HCIWriter`] will be implemented for it. Look at [`ByteWrite`]
-    pub struct ByteStream<R: AsyncRead> {
-        reader: R,
+    pub struct ByteRead<R: AsyncRead, Buf: Storage>> {
+        reader: Pin<R,
         pos: usize,
         header_buf: [u8; EVENT_HEADER_LEN],
-        parameters: Option<Box<[u8]>>,
+        parameters: Option<Buf>,
     }
-    impl<R: AsyncRead> ByteStream<R> {
+    impl<R: AsyncRead, Buf: Storage> ByteRead<R, Buf> {
         /// Wraps a raw byte stream into a HCI byte stream.
         pub fn new(reader: R) -> Self {
             Self {
@@ -307,7 +314,7 @@ pub mod byte_stream {
             Pin<&mut R>,
             &mut usize,
             &mut [u8; EVENT_HEADER_LEN],
-            &mut Option<Box<[u8]>>,
+            &mut Option<Buf>,
         ) {
             (
                 Pin::new_unchecked(&mut self.reader),
@@ -323,12 +330,12 @@ pub mod byte_stream {
             Pin<&mut R>,
             &mut usize,
             &mut [u8; EVENT_HEADER_LEN],
-            &mut Option<Box<[u8]>>,
+            &mut Option<Buf>,
         ) {
             unsafe { self.get_unchecked_mut().explode_unsafe() }
         }
     }
-    impl<R: AsyncRead + HCIFilterable> HCIFilterable for ByteStream<R> {
+    impl<R: AsyncRead + HCIFilterable> HCIFilterable for ByteRead<R> {
         fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
             self.reader_pinned_mut().set_filter(filter)
         }
@@ -338,8 +345,8 @@ pub mod byte_stream {
         }
     }
 
-    impl<R: AsyncRead> Stream for ByteStream<R> {
-        type Item = Result<EventPacket<Box<[u8]>>, Error>;
+    impl<R: AsyncRead, Buf: Storage> Stream for ByteRead<R, Buf> {
+        type Item = Result<EventPacket<Buf>, Error>;
 
         fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             let (mut reader, pos, header_buf, parameters_op) = self.explode_mut();
@@ -365,7 +372,7 @@ pub mod byte_stream {
                 Err(_) => return Poll::Ready(Some(Err(Error::BadOpcode))),
             };
             let len = usize::from(header_buf[2]);
-            let make_buf = || vec![0; len].into_boxed_slice();
+            let make_buf = || Buf::with_size(len);
 
             let buf = {
                 if let Some(buf) = parameters_op {
@@ -378,6 +385,7 @@ pub mod byte_stream {
                         .as_mut()
                 }
             };
+
             while *pos < (len + EVENT_HEADER_LEN) {
                 let amount = match reader
                     .as_mut()
@@ -402,14 +410,14 @@ pub mod byte_stream {
             ))))
         }
     }
-    impl<R: AsyncRead> HCIReader for ByteStream<R> {
-        fn read_event<'f>(mut self: Pin<&'f mut Self>) -> ReadEventFuture<'f> {
+    impl<R: AsyncRead, Buf: Storage> HCIReader<Buf> for ByteRead<R, Buf> {
+        fn read_event<'f>(mut self: Pin<&'f mut Self>) -> ReadEventFuture<'f, Buf> {
             Box::pin(futures_util::future::poll_fn(move |cx| {
                 self.as_mut().poll_next(cx)
             }))
         }
     }
-    impl<R: AsyncRead + AsyncWrite> HCIWriter for ByteStream<R> {
+    impl<R: AsyncRead + AsyncWrite, Buf: Storage> HCIWriter for ByteRead<R, Buf> {
         fn send_bytes<'f>(
             mut self: Pin<&'f mut Self>,
             bytes: &[u8],
@@ -495,5 +503,6 @@ pub mod byte_stream {
         }
     }
 }
+use crate::bytes::Storage;
 #[cfg(feature = "std")]
-pub use byte_stream::{ByteStream, ByteWrite};
+pub use byte_stream::{ByteRead, ByteWrite};
