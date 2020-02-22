@@ -1,7 +1,7 @@
 [package]
 name = "btle"
-description = "Lightweight Bluetooth Low Energy Drivers. WIP and not in a fully working state."
-version = "0.1.0"
+description = "Lightweight Bluetooth Low Energy Drivers. WIP and very not stable yet!!"
+version = "0.1.1"
 license = "GPL-3.0-only"
 readme = "README.md"
 authors = ["AndrewGi <andrew@gilbrough.com>"]

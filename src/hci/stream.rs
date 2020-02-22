@@ -272,15 +272,15 @@ pub mod byte_stream {
     /// HCI Byte Stream Reader. Implements [`HCIReader`] for async byte streams
     /// ([`futures_io::AsyncRead`]). If the stream is writable ([`futures_io::AsyncWrite`]),
     /// [`HCIWriter`] will be implemented for it. Look at [`ByteWrite`]
-    pub struct ByteRead<'r, R: AsyncRead, Buf: Storage>> {
-        reader: Pin<&'r R>,
+    pub struct ByteRead<'r, R: AsyncRead, Buf: Storage> {
+        reader: Pin<&'r mut R>,
         pos: usize,
         header_buf: [u8; EVENT_HEADER_LEN],
         parameters: Option<Buf>,
     }
     impl<'r, R: AsyncRead, Buf: Storage> ByteRead<'r, R, Buf> {
         /// Wraps a raw byte stream into a HCI byte stream.
-        pub fn new(reader: R) -> Self {
+        pub fn new(reader: Pin<&'r mut R>) -> Self {
             Self {
                 reader,
                 pos: 0,
@@ -299,25 +299,19 @@ pub mod byte_stream {
                 s.parameters = None;
             }
         }
-        pub fn reader_pinned_mut(self: Pin<&mut Self>) -> Pin<&mut R> {
-            unsafe { self.map_unchecked_mut(|s| &mut s.reader) }
-        }
-        pub fn reader_pinned(self: Pin<&Self>) -> Pin<&R> {
-            unsafe { self.map_unchecked(|s| &s.reader) }
-        }
         /// Explode the struct into multiple mutable references. Unsafe because it structurally pins
         /// `reader` in place, even if `self` isn't `Pin`. See [`Self::explode_mut`] for the safe
         /// version.
         unsafe fn explode_unsafe(
             &mut self,
         ) -> (
-            Pin<&mut R>,
+            &mut Pin<&'r mut R>,
             &mut usize,
             &mut [u8; EVENT_HEADER_LEN],
             &mut Option<Buf>,
         ) {
             (
-                Pin::new_unchecked(&mut self.reader),
+                &mut self.reader,
                 &mut self.pos,
                 &mut self.header_buf,
                 &mut self.parameters,
@@ -327,7 +321,7 @@ pub mod byte_stream {
         fn explode_mut(
             self: Pin<&mut Self>,
         ) -> (
-            Pin<&mut R>,
+            &mut Pin<&'r mut R>,
             &mut usize,
             &mut [u8; EVENT_HEADER_LEN],
             &mut Option<Buf>,
@@ -335,21 +329,21 @@ pub mod byte_stream {
             unsafe { self.get_unchecked_mut().explode_unsafe() }
         }
     }
-    impl<R: AsyncRead + HCIFilterable> HCIFilterable for ByteRead<R> {
+    impl<'r, Buf: Storage, R: AsyncRead + HCIFilterable> HCIFilterable for ByteRead<'r, R, Buf> {
         fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
-            self.reader_pinned_mut().set_filter(filter)
+            unsafe { self.get_unchecked_mut().reader.as_mut() }.set_filter(filter)
         }
 
         fn get_filter(self: Pin<&Self>) -> Result<Filter, Error> {
-            self.reader_pinned().get_filter()
+            self.reader.as_ref().get_filter()
         }
     }
 
-    impl<R: AsyncRead, Buf: Storage> Stream for ByteRead<R, Buf> {
+    impl<'r, R: AsyncRead, Buf: Storage> Stream for ByteRead<'r, R, Buf> {
         type Item = Result<EventPacket<Buf>, Error>;
 
         fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            let (mut reader, pos, header_buf, parameters_op) = self.explode_mut();
+            let (reader, pos, header_buf, parameters_op) = self.explode_mut();
             // This is safe because we structally pin reader in place.
             while *pos < EVENT_HEADER_LEN {
                 let amount = match reader.as_mut().poll_read(cx, &mut header_buf[*pos..]) {
@@ -410,20 +404,27 @@ pub mod byte_stream {
             ))))
         }
     }
-    impl<R: AsyncRead, Buf: Storage> HCIReader<Buf> for ByteRead<R, Buf> {
+    impl<'r, R: AsyncRead, Buf: Storage> HCIReader<Buf> for ByteRead<'r, R, Buf> {
         fn read_event<'f>(mut self: Pin<&'f mut Self>) -> ReadEventFuture<'f, Buf> {
             Box::pin(futures_util::future::poll_fn(move |cx| {
                 self.as_mut().poll_next(cx)
             }))
         }
     }
-    impl<R: AsyncRead + AsyncWrite, Buf: Storage> HCIWriter for ByteRead<R, Buf> {
+
+    impl<'r, R: AsyncRead + AsyncWrite, Buf: Storage> HCIWriter for ByteRead<'r, R, Buf> {
         fn send_bytes<'f>(
             mut self: Pin<&'f mut Self>,
-            bytes: &[u8],
+            _bytes: &[u8],
         ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'f>> {
             self.as_mut().clear();
-            Box::pin(ByteWrite::new(self.reader_pinned_mut(), bytes))
+            unimplemented!()
+            /*
+            Box::pin(ByteWrite::new(
+                unsafe { self.get_unchecked_mut().reader },
+                bytes,
+            ))
+            */
         }
     }
 
