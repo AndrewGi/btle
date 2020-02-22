@@ -1,6 +1,6 @@
 [package]
 name = "btle"
-description = "Lightweight Bluetooth Low Energy Drivers. WIP and very not stable yet!!"
+description = "Lightweight Bluetooth Low Energy Drivers. WIP and very not stable yet!! Designed for https://github.com/AndrewGi/BluetoothMeshRust"
 version = "0.1.1"
 license = "GPL-3.0-only"
 readme = "README.md"
