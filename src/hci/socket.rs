@@ -369,7 +369,8 @@ pub mod async_socket {
 }
 use crate::hci::stream::{Error, Filter, HCIFilterable, FILTER_LEN};
 use crate::BTAddress;
-#[cfg(feature = "bluez_async")]
-pub use async_socket::AsyncHCISocket;
 use core::fmt::{Display, Formatter};
 use core::ops::Deref;
+
+#[cfg(feature = "bluez_async")]
+pub use async_socket::AsyncHCISocket;
