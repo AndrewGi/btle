@@ -259,7 +259,9 @@ impl IncomingAdvertisement {
         self.rssi
     }
 }
-pub struct OutgoingAdvertisement {}
+pub struct OutgoingAdvertisement {
+    adv: RawAdvertisement,
+}
 pub struct AdvertisementData {}
 pub struct AdStructureIterator<'a> {
     data: &'a [u8],

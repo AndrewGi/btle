@@ -15,13 +15,15 @@ bluez = ["nix", "libc", "std", "hci"]
 bluez_async = ["bluez", "async", "tokio/uds"]
 async = ["tokio"]
 hci = []
-std = ["futures-core/std", "futures-io/std", "futures-util/std"]
+std = ["futures-core/std", "futures-io/std", "futures-util/std", "futures-task/std"]
 remote = ["std", "hci"]
 
 [dependencies]
-futures-core = {version = "0.3.4", default_features = false}
+futures-core = {version = "0.3.4", default_features = false, features=["alloc"]}
+futures-sink = {version = "0.3.4", default_features = false}
 futures-io = {version = "0.3.4", default_features = false, optional = true}
 futures-util = {version = "0.3.4", default_features = false, optional = true}
+futures-task = {version = "0.3.4", default_features = false, optional = true}
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2.66", optional = true}
 tokio = {version = "0.2.12", optional = true}

@@ -1,3 +1,4 @@
+pub mod advertiser;
 pub mod command;
 pub mod event;
 /// HCI Layer is Little Endian.

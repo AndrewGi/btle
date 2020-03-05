@@ -15,7 +15,7 @@
 #![allow(dead_code)]
 //#![no_std]
 extern crate alloc;
-
+pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
