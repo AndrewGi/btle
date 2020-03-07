@@ -1,4 +1,5 @@
-//! BlueZ socket layer. Interacts with the BlueZ driver over socket AF_BLUETOOTH.use core::pin::Pin;
+//! BlueZ socket layer. Interacts with the BlueZ driver over socket AF_BLUETOOTH.
+use core::pin::Pin;
 
 use std::os::unix::{
     io::{AsRawFd, FromRawFd, RawFd},
