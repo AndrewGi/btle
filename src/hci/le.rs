@@ -184,6 +184,29 @@ impl SetScanEnable {}
 pub struct SetAdvertisingEnable {
     pub is_enabled: bool,
 }
+const SET_ADVERTISING_ENABLE_LEN: usize = 1
+impl Command for SetAdvertisingEnable {
+    type Return = StatusReturn;
+
+    fn opcode() -> Opcode {
+        LEControllerOpcode::SetAdvertisingEnable.into()
+    }
+
+    fn byte_len(&self) -> usize {
+        SET_ADVERTISING_ENABLE_LEN
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
+        unimplemented!()
+    }
+
+    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    where
+        Self: Sized,
+    {
+        unimplemented!()
+    }
+}
 const ADVERTISING_DATA_MAX_LEN: usize = 0x1F;
 pub struct SetAdvertisingData {
     data: [u8; ADVERTISING_DATA_MAX_LEN],

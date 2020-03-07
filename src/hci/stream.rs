@@ -165,7 +165,7 @@ pub trait HCIReader<Buf: Storage> {
     /// to the function call (like below). But they can return a dynamic type with the lifetime bound
     /// to the function call. Sadly, this work around requires boxing the return value which
     /// is non-zero overhead.
-    fn read_event<'f>(self: Pin<&'f mut Self>) -> ReadEventFuture<'f, Buf>;
+    fn read_event(self: Pin<&mut Self>) -> ReadEventFuture<Buf>;
 }
 pub struct Stream<S: HCIWriter + HCIReader<Buf> + HCIFilterable, Buf: Storage> {
     pub stream: S,
@@ -236,7 +236,7 @@ impl<Buf: Storage, S: HCIWriter + HCIReader<Buf> + HCIFilterable> Stream<S, Buf>
 impl<Buf: Storage, S: HCIWriter + HCIReader<Buf> + HCIFilterable> HCIReader<Buf>
     for Stream<S, Buf>
 {
-    fn read_event<'f>(self: Pin<&'f mut Self>) -> ReadEventFuture<'f, Buf> {
+    fn read_event(self: Pin<&mut Self>) -> ReadEventFuture<Buf> {
         self.stream_pinned().read_event()
     }
 }
