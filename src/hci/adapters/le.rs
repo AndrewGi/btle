@@ -35,7 +35,7 @@ impl<'a, S: HCIWriter + HCIReader<Buf> + HCIFilterable, Buf: Storage> LEAdapter<
         self: Pin<&mut Self>,
         is_enabled: bool,
     ) -> Result<StatusReturn, adapters::Error> {
-        self.pinned_adapter().send_command::<le::SetAdvertisingEnable, <le::SetAdvertisingEnable as Command>::Return>()
+        self.pinned_adapter().send_command::<le::SetAdvertisingEnable, <le::SetAdvertisingEnable as Command>::Return>(le::SetAdvertisingEnable { is_enabled }).await
     }
 }
 impl<'a, S: HCIWriter + HCIReader<Buf> + HCIFilterable, Buf: Storage>
