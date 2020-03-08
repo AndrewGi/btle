@@ -1,3 +1,4 @@
+use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
 use crate::hci::{HCIConversionError, HCIPackError, Opcode, OCF, OGF};
@@ -91,6 +92,7 @@ impl From<LEControllerOpcode> for Opcode {
         Opcode(OGF::LEController, opcode.into())
     }
 }
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum LEMetaEventCode {
     ConnectionComplete = 0x01,
     AdvertisingReport = 0x02,
@@ -131,6 +133,7 @@ pub enum LEMetaEventCode {
 pub trait LEMetaEvent {
     const CODE: LEMetaEventCode;
 }
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetScanEnable {
     pub is_enabled: bool,
     pub filter_duplicates: bool,
@@ -178,6 +181,7 @@ impl Command for SetScanEnable {
     }
 }
 impl SetScanEnable {}
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetAdvertisingEnable {
     pub is_enabled: bool,
 }
@@ -212,6 +216,7 @@ impl Command for SetAdvertisingEnable {
     }
 }
 const ADVERTISING_DATA_MAX_LEN: usize = 0x1F;
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetAdvertisingData {
     data: [u8; ADVERTISING_DATA_MAX_LEN],
     len: u8,
@@ -254,25 +259,120 @@ impl SetAdvertisingData {
         }
     }
 }
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum ScanType {
     Passive = 0x00,
     Active = 0x01,
 }
+impl From<ScanType> for u8 {
+    fn from(s: ScanType) -> Self {
+        s as u8
+    }
+}
+impl TryFrom<u8> for ScanType {
+    type Error = HCIConversionError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ScanType::Passive),
+            1 => Ok(ScanType::Active),
+            _ => Err(HCIConversionError(())),
+        }
+    }
+}
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum OwnAddressType {
     Public = 0x00,
     Random = 0x01,
     PrivateOrPublic = 0x02,
     PrivateOrRandom = 0x03,
 }
+
+impl From<OwnAddressType> for u8 {
+    fn from(s: OwnAddressType) -> Self {
+        s as u8
+    }
+}
+impl TryFrom<u8> for OwnAddressType {
+    type Error = HCIConversionError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(OwnAddressType::Public),
+            1 => Ok(OwnAddressType::Random),
+            2 => Ok(OwnAddressType::PrivateOrPublic),
+            3 => Ok(OwnAddressType::PrivateOrRandom),
+            _ => Err(HCIConversionError(())),
+        }
+    }
+}
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum ScanningFilterPolicy {
     All = 0x00,
     Whitelisted = 0x01,
     DirectedAll = 0x02,
     DirectedWhitelisted = 0x03,
 }
+impl From<ScanningFilterPolicy> for u8 {
+    fn from(p: ScanningFilterPolicy) -> Self {
+        p as u8
+    }
+}
+impl TryFrom<u8> for ScanningFilterPolicy {
+    type Error = HCIConversionError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ScanningFilterPolicy::All),
+            1 => Ok(ScanningFilterPolicy::Whitelisted),
+            2 => Ok(ScanningFilterPolicy::DirectedAll),
+            3 => Ok(ScanningFilterPolicy::DirectedWhitelisted),
+            _ => Err(HCIConversionError(())),
+        }
+    }
+}
 /// Range 0x0004 --> 0x4000
 /// Default 0x0010 (10 ms)
 /// Time = N *  0.625 ms
 /// Time Range 2.5 ms --> 10.24 s
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ScanInterval(pub u16);
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ScanWindow(pub u16);
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct SetScanParameters {
+    pub scan_type: ScanType,
+    pub scan_internal: ScanInterval,
+    pub scan_window: ScanWindow,
+    pub own_address_type: OwnAddressType,
+    pub scanning_filter_policy: ScanningFilterPolicy,
+}
+pub const SET_SCAN_PARAMETERS_LEN: usize = 7;
+impl Command for SetScanParameters {
+    type Return = StatusReturn;
+
+    fn opcode() -> Opcode {
+        LEControllerOpcode::SetScanParameters.into()
+    }
+
+    fn byte_len(&self) -> usize {
+        SET_SCAN_PARAMETERS_LEN
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
+        HCIPackError::expect_length(SET_SCAN_PARAMETERS_LEN, buf)?;
+        buf[0] = self.scan_type.into();
+        buf[1..3].copy_from_slice(&self.scan_internal.0.to_bytes_le()[..]);
+        buf[3..5].copy_from_slice(&self.scan_window.0.to_bytes_le()[..]);
+        buf[5] = self.own_address_type.into();
+        buf[6] = self.scanning_filter_policy.into();
+        Ok(())
+    }
+
+    fn unpack_from(_buf: &[u8]) -> Result<Self, HCIPackError>
+    where
+        Self: Sized,
+    {
+        unimplemented!()
+    }
+}
