@@ -1,6 +1,7 @@
 use crate::hci::stream::PacketType;
 use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
 use core::convert::TryFrom;
+use std::fmt::Formatter;
 
 /// HCI Event Code. 8-bit code corresponding to an HCI Event. Check the Bluetooth Core Spec for more.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -162,16 +163,12 @@ pub trait Event {
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
     fn pack_full(&self, buf: &mut [u8]) -> Result<usize, HCIPackError> {
         let full = self.full_len();
-        if buf.len() != full {
-            Err(HCIPackError::BadLength)
-        } else {
-            self.pack_into(&mut buf[3..])?;
-            buf[0] = PacketType::Event.into();
-            buf[1] = Self::CODE.into();
-            buf[2] =
-                u8::try_from(self.byte_len()).expect("events can only have 0xFF parameter bytes");
-            Ok(full)
-        }
+        HCIPackError::expect_length(full, buf)?;
+        self.pack_into(&mut buf[3..])?;
+        buf[0] = PacketType::Event.into();
+        buf[1] = Self::CODE.into();
+        buf[2] = u8::try_from(self.byte_len()).expect("events can only have 0xFF parameter bytes");
+        Ok(full)
     }
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
@@ -180,18 +177,18 @@ pub trait Event {
 
 /// Unprocessed HCI Event Packet
 pub struct EventPacket<Storage: AsRef<[u8]>> {
-    event_opcode: EventCode,
+    event_code: EventCode,
     parameters: Storage,
 }
 impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
     pub fn new(opcode: EventCode, parameters: Storage) -> Self {
         Self {
-            event_opcode: opcode,
+            event_code: opcode,
             parameters,
         }
     }
     pub fn event_code(&self) -> EventCode {
-        self.event_opcode
+        self.event_code
     }
     pub fn parameters(&self) -> &[u8] {
         self.parameters.as_ref()
@@ -200,94 +197,87 @@ impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
         self.parameters
     }
 }
-
+impl<Storage: AsRef<[u8]>> core::fmt::Debug for EventPacket<Storage> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        f.debug_struct("EventPacket")
+            .field("event_code", &self.event_code)
+            .field("parameters", &AsRef::<[u8]>::as_ref(&self.parameters))
+            .finish()
+    }
+}
 pub trait ReturnParameters {
-    const EVENT_CODE: EventCode;
     fn byte_len(&self) -> usize;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized;
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
 }
-
 pub struct StatusReturn {
     pub status: ErrorCode,
 }
-impl StatusReturn {
-    pub const fn byte_len() -> usize {
+impl ReturnParameters for StatusReturn {
+    fn byte_len(&self) -> usize {
         1
     }
-}
-impl ReturnParameters for StatusReturn {
-    const EVENT_CODE: EventCode = EventCode::CommandStatus;
-
-    fn byte_len(&self) -> usize {
-        Self::byte_len()
-    }
-
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError> {
-        if buf.len() != Self::byte_len() {
-            Err(HCIPackError::BadLength)
-        } else {
-            Ok(Self {
-                status: ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::BadBytes)?,
-            })
-        }
-    }
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if buf.len() != Self::byte_len() {
-            Err(HCIPackError::BadLength)
-        } else {
-            buf[0] = self.status.into();
-            Ok(())
-        }
-    }
-}
-
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct CommandComplete {
-    pub status: ErrorCode,
-    pub num_command_packets: u8,
-    pub opcode: Opcode,
-}
-pub const COMMAND_COMPLETE_LEN: usize = 1 + 1 + OPCODE_LEN;
-impl Event for CommandComplete {
-    const CODE: EventCode = EventCode::CommandComplete;
-
-    fn byte_len(&self) -> usize {
-        COMMAND_COMPLETE_LEN
-    }
-
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if buf.len() < COMMAND_COMPLETE_LEN {
-            Err(HCIPackError::SmallBuffer)
-        } else {
-            self.opcode.pack(&mut buf[2..4])?;
-            buf[0] = self.status.into();
-            buf[1] = self.num_command_packets;
-            Ok(())
-        }
+        HCIPackError::expect_length(1, buf)?;
+        buf[0] = self.status.into();
+        Ok(())
     }
 
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized,
     {
-        if buf.len() == COMMAND_COMPLETE_LEN {
-            let opcode = Opcode::unpack(&buf[2..4])?;
-            let status = ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::BadBytes)?;
-            Ok(CommandComplete {
-                status,
-                num_command_packets: buf[1],
-                opcode,
+        HCIPackError::expect_length(1, buf)?;
+        Ok(StatusReturn {
+            status: ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::bad_index(0))?,
+        })
+    }
+}
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct CommandComplete<Params: ReturnParameters> {
+    pub num_command_packets: u8,
+    pub opcode: Opcode,
+    pub params: Params,
+}
+impl<Params: ReturnParameters> CommandComplete<Params> {}
+pub const COMMAND_COMPLETE_HEADER_LEN: usize = 1 + OPCODE_LEN;
+impl<Params: ReturnParameters> Event for CommandComplete<Params> {
+    const CODE: EventCode = EventCode::CommandComplete;
+
+    fn byte_len(&self) -> usize {
+        COMMAND_COMPLETE_HEADER_LEN + self.params.byte_len()
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
+        HCIPackError::expect_length(self.byte_len(), buf)?;
+        self.params.pack_into(&mut buf[3..])?;
+        self.opcode.pack(&mut buf[1..3])?;
+        buf[0] = self.num_command_packets;
+        Ok(())
+    }
+
+    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    where
+        Self: Sized,
+    {
+        if buf.len() < COMMAND_COMPLETE_HEADER_LEN {
+            Err(HCIPackError::BadLength {
+                expected: COMMAND_COMPLETE_HEADER_LEN,
+                got: buf.len(),
             })
         } else {
-            Err(HCIPackError::BadLength)
+            let opcode = Opcode::unpack(&buf[1..3])?;
+            Ok(CommandComplete {
+                num_command_packets: buf[0],
+                opcode,
+                params: Params::unpack_from(&buf[3..])?,
+            })
         }
     }
 }
-
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct CommandStatus {
     pub status: ErrorCode,
@@ -303,30 +293,25 @@ impl Event for CommandStatus {
     }
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if buf.len() < COMMAND_STATUS_LEN {
-            Err(HCIPackError::SmallBuffer)
-        } else {
-            self.opcode.pack(&mut buf[2..4])?;
-            buf[0] = self.status.into();
-            buf[1] = self.num_command_packets;
-            Ok(())
-        }
+        HCIPackError::expect_length(COMMAND_STATUS_LEN, buf)?;
+        self.opcode.pack(&mut buf[2..4])?;
+        buf[0] = self.status.into();
+        buf[1] = self.num_command_packets;
+        Ok(())
     }
 
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized,
     {
-        if buf.len() == COMMAND_STATUS_LEN {
-            let opcode = Opcode::unpack(&buf[2..4])?;
-            let status = ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::BadBytes)?;
-            Ok(CommandStatus {
-                status,
-                num_command_packets: buf[1],
-                opcode,
-            })
-        } else {
-            Err(HCIPackError::BadLength)
-        }
+        HCIPackError::expect_length(COMMAND_STATUS_LEN, buf)?;
+        let opcode = Opcode::unpack(&buf[2..4])?;
+        let status =
+            ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::BadBytes { index: Some(0) })?;
+        Ok(CommandStatus {
+            status,
+            num_command_packets: buf[1],
+            opcode,
+        })
     }
 }

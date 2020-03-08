@@ -1,7 +1,6 @@
 use crate::bytes::Storage;
 use crate::hci::adapters;
-use crate::hci::command::Command;
-use crate::hci::event::StatusReturn;
+use crate::hci::event::{CommandComplete, StatusReturn};
 use crate::hci::le;
 use crate::hci::stream::{HCIFilterable, HCIReader, HCIWriter};
 use core::pin::Pin;
@@ -23,20 +22,20 @@ impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> LEAdapter<'a, S
         &mut self,
         is_enabled: bool,
         filter_duplicates: bool,
-    ) -> Result<StatusReturn, adapters::Error> {
+    ) -> Result<CommandComplete<StatusReturn>, adapters::Error> {
         self.adapter_mut()
-            .send_command::<le::SetScanEnable, <le::SetScanEnable as Command>::Return>(
-                le::SetScanEnable {
-                    is_enabled,
-                    filter_duplicates,
-                },
-            )
+            .send_command(le::SetScanEnable {
+                is_enabled,
+                filter_duplicates,
+            })
             .await
     }
     pub async fn set_advertising_enabled(
         &mut self,
         is_enabled: bool,
-    ) -> Result<StatusReturn, adapters::Error> {
-        self.adapter_mut().send_command::<le::SetAdvertisingEnable, <le::SetAdvertisingEnable as Command>::Return>(le::SetAdvertisingEnable { is_enabled }).await
+    ) -> Result<CommandComplete<StatusReturn>, adapters::Error> {
+        self.adapter_mut()
+            .send_command(le::SetAdvertisingEnable { is_enabled })
+            .await
     }
 }

@@ -1,6 +1,7 @@
 use crate::bytes::Storage;
+use crate::error;
 use crate::hci::command::Command;
-use crate::hci::event::{EventCode, EventPacket, ReturnParameters};
+use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket, ReturnParameters};
 use crate::hci::stream::Error::UnsupportedPacketType;
 use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
 use core::convert::{TryFrom, TryInto};
@@ -51,7 +52,12 @@ pub enum Error {
     IOError,
     HCIError(ErrorCode),
 }
-
+impl From<HCIPackError> for Error {
+    fn from(e: HCIPackError) -> Self {
+        Error::CommandError(e)
+    }
+}
+impl error::Error for Error {}
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 pub struct Filter {
     type_mask: u32,
@@ -190,7 +196,7 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
     pub async fn send_command<Cmd: Command, Return: ReturnParameters, Buf: Storage>(
         mut self: Pin<&mut Self>,
         command: Cmd,
-    ) -> Result<Return, Error>
+    ) -> Result<CommandComplete<Return>, Error>
     where
         S: HCIWriter,
     {
@@ -209,8 +215,8 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
         filter.enable_event(EventCode::CommandComplete);
         filter.enable_event(EventCode::LEMeta);
 
-        filter.enable_event(Return::EVENT_CODE);
-        if !filter.get_event(Return::EVENT_CODE) {
+        filter.enable_event(CommandComplete::<Return>::CODE);
+        if !filter.get_event(CommandComplete::<Return>::CODE) {
             return Err(Error::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
@@ -225,9 +231,13 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
         // Wait for response
         for _try_i in 0..HCI_EVENT_READ_TRIES {
             let event: EventPacket<Buf> = self.as_mut().read_event().await?;
-            if event.event_code() == Return::EVENT_CODE {
-                self.stream_pinned().set_filter(&old_filter)?;
-                return Return::unpack_from(event.parameters()).map_err(Error::CommandError);
+            println!("event: {:?}", event);
+            if event.event_code() == CommandComplete::<Return>::CODE {
+                if Opcode::unpack(&event.parameters().as_ref()[1..3])? == Cmd::opcode() {
+                    self.stream_pinned().set_filter(&old_filter)?;
+                    return CommandComplete::unpack_from(event.parameters())
+                        .map_err(Error::CommandError);
+                }
             }
         }
         Err(Error::StreamFailed)
@@ -251,7 +261,7 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
             return Err(UnsupportedPacketType(header[0]));
         }
         let event_code = EventCode::try_from(header[1]).map_err(|_| Error::BadEventCode)?;
-        let len = header[1];
+        let len = header[0];
         let mut buf = Buf::with_size(len.into());
         self.read_exact(buf.as_mut()).await?;
         Ok(EventPacket::new(event_code, buf))
@@ -282,3 +292,6 @@ impl<T: futures_io::AsyncWrite> HCIWriter for T {
         futures_io::AsyncWrite::poll_flush(self, cx).map_err(|_| Error::IOError)
     }
 }
+/// Implements all the traits required to be a complete HCI Stream.
+pub trait HCIStreamable: HCIWriter + HCIReader + HCIFilterable {}
+impl<T: HCIWriter + HCIReader + HCIFilterable> HCIStreamable for T {}

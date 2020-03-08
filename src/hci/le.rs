@@ -135,6 +135,9 @@ pub struct SetScanEnable {
     pub is_enabled: bool,
     pub filter_duplicates: bool,
 }
+impl SetScanEnable {
+    pub const BYTE_LEN: usize = 2;
+}
 impl Command for SetScanEnable {
     type Return = StatusReturn;
 
@@ -143,41 +146,35 @@ impl Command for SetScanEnable {
     }
 
     fn byte_len(&self) -> usize {
-        2
+        Self::BYTE_LEN
     }
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if buf.len() < 2 {
-            Err(HCIPackError::SmallBuffer)
-        } else {
-            buf[0] = self.is_enabled.into();
-            buf[1] = self.filter_duplicates.into();
-            Ok(())
-        }
+        HCIPackError::expect_length(Self::BYTE_LEN, buf)?;
+        buf[0] = self.is_enabled.into();
+        buf[1] = self.filter_duplicates.into();
+        Ok(())
     }
 
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized,
     {
-        if buf.len() == 2 {
-            let is_enabled = match buf[0] {
-                0 => false,
-                1 => true,
-                _ => return Err(HCIPackError::BadBytes),
-            };
-            let filter_duplicates = match buf[1] {
-                0 => false,
-                1 => true,
-                _ => return Err(HCIPackError::BadBytes),
-            };
-            Ok(Self {
-                is_enabled,
-                filter_duplicates,
-            })
-        } else {
-            Err(HCIPackError::BadLength)
-        }
+        HCIPackError::expect_length(Self::BYTE_LEN, buf)?;
+        let is_enabled = match buf[0] {
+            0 => false,
+            1 => true,
+            _ => return Err(HCIPackError::bad_index(0)),
+        };
+        let filter_duplicates = match buf[1] {
+            0 => false,
+            1 => true,
+            _ => return Err(HCIPackError::bad_index(1)),
+        };
+        Ok(Self {
+            is_enabled,
+            filter_duplicates,
+        })
     }
 }
 impl SetScanEnable {}
@@ -197,26 +194,20 @@ impl Command for SetAdvertisingEnable {
     }
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if buf.len() != SET_ADVERTISING_ENABLE_LEN {
-            Err(HCIPackError::BadLength)
-        } else {
-            buf[0] = self.is_enabled.into();
-            Ok(())
-        }
+        HCIPackError::expect_length(SET_ADVERTISING_ENABLE_LEN, buf)?;
+        buf[0] = self.is_enabled.into();
+        Ok(())
     }
 
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized,
     {
-        if buf.len() != SET_ADVERTISING_ENABLE_LEN {
-            Err(HCIPackError::BadLength)
-        } else {
-            match buf[0] {
-                0 => Ok(Self { is_enabled: false }),
-                1 => Ok(Self { is_enabled: true }),
-                _ => Err(HCIPackError::BadBytes),
-            }
+        HCIPackError::expect_length(SET_ADVERTISING_ENABLE_LEN, buf)?;
+        match buf[0] {
+            0 => Ok(Self { is_enabled: false }),
+            1 => Ok(Self { is_enabled: true }),
+            _ => Err(HCIPackError::bad_index(0)),
         }
     }
 }
@@ -238,14 +229,11 @@ impl Command for SetAdvertisingData {
     }
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if buf.len() == self.byte_len() {
-            buf[0] = self.len;
-            let l = usize::from(self.len);
-            buf[1..][..l].copy_from_slice(&self.data[..l]);
-            Ok(())
-        } else {
-            Err(HCIPackError::BadLength)
-        }
+        HCIPackError::expect_length(self.byte_len(), buf)?;
+        buf[0] = self.len;
+        let l = usize::from(self.len);
+        buf[1..][..l].copy_from_slice(&self.data[..l]);
+        Ok(())
     }
 
     fn unpack_from(_buf: &[u8]) -> Result<Self, HCIPackError>

@@ -1,7 +1,8 @@
 pub mod le;
 use crate::bytes::Storage;
+use crate::error;
 use crate::hci::command::Command;
-use crate::hci::event::{EventPacket, ReturnParameters};
+use crate::hci::event::{CommandComplete, EventPacket, ReturnParameters};
 use crate::hci::stream;
 use crate::hci::stream::{HCIFilterable, HCIReader, HCIWriter, Stream};
 use core::fmt::Formatter;
@@ -21,8 +22,7 @@ impl core::fmt::Display for Error {
         write!(f, "{:?}", self)
     }
 }
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl error::Error for Error {}
 pub struct Adapter<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> {
     pub stream: Stream<S>,
     _marker: core::marker::PhantomData<Buf>,
@@ -46,7 +46,7 @@ impl<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> Adapter<S, Buf> {
     pub async fn send_command<Cmd: Command, Return: ReturnParameters>(
         self: Pin<&mut Self>,
         command: Cmd,
-    ) -> Result<Return, Error> {
+    ) -> Result<CommandComplete<Return>, Error> {
         self.stream_pinned()
             .send_command::<Cmd, Return, Buf>(command)
             .await

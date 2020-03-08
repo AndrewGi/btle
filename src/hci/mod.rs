@@ -11,6 +11,7 @@ pub mod remote;
 pub mod socket;
 pub mod stream;
 use crate::bytes::ToFromBytesEndian;
+use crate::error;
 use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -145,6 +146,14 @@ pub enum ErrorCode {
     EIRTooLarge = 0x36,
     SimplePairingNotSupported = 0x37,
     HostBusyPairing = 0x38,
+}
+impl ErrorCode {
+    pub fn is_ok(self) -> bool {
+        match self {
+            ErrorCode::Ok => true,
+            _ => false,
+        }
+    }
 }
 impl From<ErrorCode> for u8 {
     fn from(code: ErrorCode) -> Self {
@@ -281,26 +290,20 @@ impl Opcode {
     /// # Errors
     /// returns `HCIPackError::BadLength` if `buf.len() != OPCODE_LEN`.
     pub fn pack(self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        if OPCODE_LEN == buf.len() {
-            buf[..2].copy_from_slice(&u16::from(self).to_bytes_le());
-            Ok(())
-        } else {
-            Err(HCIPackError::BadLength)
-        }
+        HCIPackError::expect_length(OPCODE_LEN, buf)?;
+        buf[..2].copy_from_slice(&u16::from(self).to_bytes_le());
+        Ok(())
     }
     /// # Errors
     /// returns `HCIPackError::BadLength` if `buf.len() != OPCODE_LEN`.
     /// returns `HCIPackError::BadBytes` if `buf` doesn't contain a value opcode.
     pub fn unpack(buf: &[u8]) -> Result<Opcode, HCIPackError> {
-        if buf.len() == OPCODE_LEN {
-            Ok(u16::from_bytes_le(&buf)
-                .expect("length checked above")
-                .try_into()
-                .ok()
-                .ok_or(HCIPackError::BadBytes)?)
-        } else {
-            Err(HCIPackError::BadLength)
-        }
+        HCIPackError::expect_length(OPCODE_LEN, buf)?;
+        Ok(u16::from_bytes_le(&buf)
+            .expect("length checked above")
+            .try_into()
+            .ok()
+            .ok_or(HCIPackError::BadBytes { index: Some(0) })?)
     }
     pub const fn nop() -> Opcode {
         Opcode(OGF::NOP, OCF(0))
@@ -325,8 +328,28 @@ impl TryFrom<u16> for Opcode {
 }
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum HCIPackError {
-    BadOpcode,
-    BadLength,
-    SmallBuffer,
-    BadBytes,
+    BadOpcode { expected: Opcode, got: u16 },
+    BadLength { expected: usize, got: usize },
+    BadBytes { index: Option<usize> },
 }
+impl HCIPackError {
+    /// Ensure `buf.len() == expected`. Returns `Ok(())` if they are equal or
+    /// `Err(HCIPackError::BadLength)` not equal.
+    #[inline]
+    pub fn expect_length(expected: usize, buf: &[u8]) -> Result<(), HCIPackError> {
+        if buf.len() != expected {
+            Err(HCIPackError::BadLength {
+                expected,
+                got: buf.len(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    #[inline]
+    pub fn bad_index(index: usize) -> HCIPackError {
+        HCIPackError::BadBytes { index: Some(index) }
+    }
+}
+impl error::Error for HCIPackError {}

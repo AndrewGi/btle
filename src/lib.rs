@@ -24,6 +24,7 @@ pub mod adapter;
 pub mod advertisement;
 pub mod advertiser;
 pub mod bytes;
+pub mod error;
 #[cfg(feature = "hci")]
 pub mod hci;
 pub mod manager;
