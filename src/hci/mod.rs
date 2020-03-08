@@ -1,7 +1,8 @@
+//! HCI Layer is Little Endian.
+pub mod adapters;
 pub mod advertiser;
 pub mod command;
 pub mod event;
-/// HCI Layer is Little Endian.
 pub mod le;
 pub mod link_control;
 #[cfg(all(feature = "remote"))]
