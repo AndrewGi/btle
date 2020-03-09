@@ -1,9 +1,9 @@
 use crate::bytes::Storage;
 use crate::error;
 use crate::hci::command::Command;
-use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket, ReturnParameters};
+use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
 use crate::hci::stream::Error::UnsupportedPacketType;
-use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
+use crate::hci::{HCIConversionError, HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
 use core::convert::{TryFrom, TryInto};
 use core::pin::Pin;
 use core::task::{Context, Poll};
@@ -50,7 +50,6 @@ pub enum Error {
     StreamClosed,
     StreamFailed,
     IOError,
-    HCIError(ErrorCode),
 }
 impl From<HCIPackError> for Error {
     fn from(e: HCIPackError) -> Self {
@@ -193,10 +192,10 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
         }
         futures_util::future::poll_fn(|cx| self.as_mut().stream_pinned().poll_flush(cx)).await
     }
-    pub async fn send_command<Cmd: Command, Return: ReturnParameters, Buf: Storage>(
+    pub async fn send_command<Cmd: Command, Buf: Storage>(
         mut self: Pin<&mut Self>,
         command: Cmd,
-    ) -> Result<CommandComplete<Return>, Error>
+    ) -> Result<CommandComplete<Cmd::Return>, Error>
     where
         S: HCIWriter,
     {
@@ -215,8 +214,8 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
         filter.enable_event(EventCode::CommandComplete);
         filter.enable_event(EventCode::LEMeta);
 
-        filter.enable_event(CommandComplete::<Return>::CODE);
-        if !filter.get_event(CommandComplete::<Return>::CODE) {
+        filter.enable_event(CommandComplete::<Cmd::Return>::CODE);
+        if !filter.get_event(CommandComplete::<Cmd::Return>::CODE) {
             return Err(Error::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
@@ -232,7 +231,7 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
         for _try_i in 0..HCI_EVENT_READ_TRIES {
             let event: EventPacket<Buf> = self.as_mut().read_event().await?;
             println!("event: {:?}", event);
-            if event.event_code() == CommandComplete::<Return>::CODE {
+            if event.event_code() == CommandComplete::<Cmd::Return>::CODE {
                 if Opcode::unpack(&event.parameters().as_ref()[1..3])? == Cmd::opcode() {
                     self.stream_pinned().set_filter(&old_filter)?;
                     return CommandComplete::unpack_from(event.parameters())

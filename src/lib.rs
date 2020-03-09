@@ -13,8 +13,9 @@
     clippy::doc_markdown
 )]
 #![allow(dead_code)]
-//#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
+/// Workaround for returning futures from async Traits.
 pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;
 #[cfg(feature = "std")]
 #[macro_use]

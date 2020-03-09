@@ -154,6 +154,12 @@ impl ErrorCode {
             _ => false,
         }
     }
+    pub fn error(self) -> Result<(), ErrorCode> {
+        match self {
+            ErrorCode::Ok => Ok(()),
+            e => Err(e),
+        }
+    }
 }
 impl From<ErrorCode> for u8 {
     fn from(code: ErrorCode) -> Self {
@@ -331,6 +337,7 @@ pub enum HCIPackError {
     BadOpcode { expected: Opcode, got: u16 },
     BadLength { expected: usize, got: usize },
     BadBytes { index: Option<usize> },
+    InvalidFields,
 }
 impl HCIPackError {
     /// Ensure `buf.len() == expected`. Returns `Ok(())` if they are equal or

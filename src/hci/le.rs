@@ -342,7 +342,7 @@ pub struct ScanWindow(pub u16);
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetScanParameters {
     pub scan_type: ScanType,
-    pub scan_internal: ScanInterval,
+    pub scan_interval: ScanInterval,
     pub scan_window: ScanWindow,
     pub own_address_type: OwnAddressType,
     pub scanning_filter_policy: ScanningFilterPolicy,
@@ -361,8 +361,12 @@ impl Command for SetScanParameters {
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
         HCIPackError::expect_length(SET_SCAN_PARAMETERS_LEN, buf)?;
+        if self.scan_window.0 > self.scan_interval.0 {
+            // The scan window should always be less than or equal to the scan interval.
+            return Err(HCIPackError::InvalidFields);
+        }
         buf[0] = self.scan_type.into();
-        buf[1..3].copy_from_slice(&self.scan_internal.0.to_bytes_le()[..]);
+        buf[1..3].copy_from_slice(&self.scan_interval.0.to_bytes_le()[..]);
         buf[3..5].copy_from_slice(&self.scan_window.0.to_bytes_le()[..]);
         buf[5] = self.own_address_type.into();
         buf[6] = self.scanning_filter_policy.into();

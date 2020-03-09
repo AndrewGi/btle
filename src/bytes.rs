@@ -275,28 +275,6 @@ impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> ops::IndexMut<usize>
         &mut self.as_mut()[index]
     }
 }
-impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> Storage for StaticBuf<ArrayBuf> {
-    fn with_size(size: usize) -> Self
-    where
-        Self: Sized,
-    {
-        assert!(
-            size <= Self::max_size(),
-            "requested size {} bigger than static buf size {}",
-            size,
-            Self::max_size()
-        );
-        Self {
-            buf: ArrayBuf::default(),
-            len: size,
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-
 /// Objects that store and own bytes (`Box<[u8]>`, `Vec<u8>`, `StaticBuf<[u8; 32]>`, etc).
 /// This allows for generic byte storage types for byte buffers.
 pub trait Storage: AsRef<[u8]> + AsMut<[u8]> {
@@ -324,5 +302,27 @@ impl Storage for Box<[u8]> {
         Self: Sized,
     {
         Vec::with_size(size).into_boxed_slice()
+    }
+}
+
+impl<ArrayBuf: AsRef<[u8]> + AsMut<[u8]> + Default + Copy> Storage for StaticBuf<ArrayBuf> {
+    fn with_size(size: usize) -> Self
+    where
+        Self: Sized,
+    {
+        assert!(
+            size <= Self::max_size(),
+            "requested size {} bigger than static buf size {}",
+            size,
+            Self::max_size()
+        );
+        Self {
+            buf: ArrayBuf::default(),
+            len: size,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.len
     }
 }

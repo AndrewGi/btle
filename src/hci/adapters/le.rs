@@ -22,13 +22,23 @@ impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> LEAdapter<'a, S
         &mut self,
         is_enabled: bool,
         filter_duplicates: bool,
-    ) -> Result<CommandComplete<StatusReturn>, adapters::Error> {
+    ) -> Result<(), adapters::Error> {
         self.adapter_mut()
             .send_command(le::SetScanEnable {
                 is_enabled,
                 filter_duplicates,
             })
-            .await
+            .await?
+            .params
+            .status
+            .error()?;
+        Ok(())
+    }
+    pub async fn set_scan_parameters(
+        &mut self,
+        scan_parameters: le::SetScanParameters,
+    ) -> Result<CommandComplete<StatusReturn>, adapters::Error> {
+        self.adapter_mut().send_command(scan_parameters).await
     }
     pub async fn set_advertising_enabled(
         &mut self,

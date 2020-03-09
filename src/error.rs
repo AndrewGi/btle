@@ -1,3 +1,4 @@
+/// Generic Error Trait. Similar to `std::error::Error`.
 use core::fmt::Debug;
 use std::fmt::Formatter;
 

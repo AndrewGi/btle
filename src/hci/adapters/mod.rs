@@ -1,20 +1,26 @@
 pub mod le;
 use crate::bytes::Storage;
-use crate::error;
 use crate::hci::command::Command;
-use crate::hci::event::{CommandComplete, EventPacket, ReturnParameters};
-use crate::hci::stream;
+use crate::hci::event::{CommandComplete, EventPacket};
 use crate::hci::stream::{HCIFilterable, HCIReader, HCIWriter, Stream};
+use crate::hci::{stream, ErrorCode};
+use crate::{error, hci};
 use core::fmt::Formatter;
 use core::pin::Pin;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum Error {
     StreamError(stream::Error),
+    ErrorCode(hci::ErrorCode),
 }
 impl From<stream::Error> for Error {
     fn from(e: stream::Error) -> Self {
         Error::StreamError(e)
+    }
+}
+impl From<hci::ErrorCode> for Error {
+    fn from(e: ErrorCode) -> Self {
+        Error::ErrorCode(e)
     }
 }
 impl core::fmt::Display for Error {
@@ -43,12 +49,12 @@ impl<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> Adapter<S, Buf> {
     pub fn le(self: Pin<&mut Self>) -> le::LEAdapter<S, Buf> {
         le::LEAdapter::new(self)
     }
-    pub async fn send_command<Cmd: Command, Return: ReturnParameters>(
+    pub async fn send_command<Cmd: Command>(
         self: Pin<&mut Self>,
         command: Cmd,
-    ) -> Result<CommandComplete<Return>, Error> {
+    ) -> Result<CommandComplete<Cmd::Return>, Error> {
         self.stream_pinned()
-            .send_command::<Cmd, Return, Buf>(command)
+            .send_command::<Cmd, Buf>(command)
             .await
             .map_err(Error::StreamError)
     }
