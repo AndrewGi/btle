@@ -254,7 +254,7 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
     pub async fn read_event<Buf: Storage>(
         mut self: Pin<&mut Self>,
     ) -> Result<EventPacket<Buf>, Error> {
-        let mut header = [0_u8; EVENT_HEADER_LEN];
+        let mut header = [0_u8; EVENT_HEADER_LEN + 3];
         self.as_mut().read_exact(&mut header[..]).await?;
         if header[0] != u8::from(PacketType::Event) {
             return Err(UnsupportedPacketType(header[0]));

@@ -331,14 +331,62 @@ impl TryFrom<u8> for ScanningFilterPolicy {
         }
     }
 }
+const INTERVAL_MIN: u16 = 0x0004;
+const INTERVAL_MAX: u16 = 0x4000;
 /// Range 0x0004 --> 0x4000
 /// Default 0x0010 (10 ms)
 /// Time = N *  0.625 ms
 /// Time Range 2.5 ms --> 10.24 s
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct ScanInterval(pub u16);
+pub struct ScanInterval(u16);
+impl ScanInterval {
+    pub const DEFAULT: ScanInterval = ScanInterval(0x0010);
+    pub fn new(interval: u16) -> ScanInterval {
+        assert!(
+            interval >= INTERVAL_MIN && interval <= INTERVAL_MAX,
+            "interval '{}' is out of range"
+        );
+        ScanInterval(interval)
+    }
+    pub fn as_microseconds(self) -> u32 {
+        u32::from(u16::from(self)) * 625
+    }
+}
+impl From<ScanInterval> for u16 {
+    fn from(i: ScanInterval) -> u16 {
+        i.0
+    }
+}
+impl Default for ScanInterval {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct ScanWindow(pub u16);
+pub struct ScanWindow(u16);
+impl ScanWindow {
+    pub const DEFAULT: ScanWindow = ScanWindow(0x0010);
+    pub fn new(window: u16) -> ScanWindow {
+        assert!(
+            window >= INTERVAL_MIN && window <= INTERVAL_MAX,
+            "window '{}' is out of range"
+        );
+        ScanWindow(window)
+    }
+    pub fn as_microseconds(self) -> u32 {
+        u32::from(u16::from(self)) * 625
+    }
+}
+impl From<ScanWindow> for u16 {
+    fn from(w: ScanWindow) -> u16 {
+        w.0
+    }
+}
+impl Default for ScanWindow {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetScanParameters {
     pub scan_type: ScanType,
@@ -346,6 +394,20 @@ pub struct SetScanParameters {
     pub scan_window: ScanWindow,
     pub own_address_type: OwnAddressType,
     pub scanning_filter_policy: ScanningFilterPolicy,
+}
+impl SetScanParameters {
+    pub const DEFAULT: SetScanParameters = SetScanParameters {
+        scan_type: ScanType::Passive,
+        scan_interval: ScanInterval::DEFAULT,
+        scan_window: ScanWindow::DEFAULT,
+        own_address_type: OwnAddressType::Public,
+        scanning_filter_policy: ScanningFilterPolicy::All,
+    };
+}
+impl Default for SetScanParameters {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
 }
 pub const SET_SCAN_PARAMETERS_LEN: usize = 7;
 impl Command for SetScanParameters {
