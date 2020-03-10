@@ -1,4 +1,3 @@
-use crate::bytes::Storage;
 use crate::error;
 use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};

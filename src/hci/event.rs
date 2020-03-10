@@ -1,5 +1,5 @@
 use crate::bytes::Storage;
-use crate::hci::packet::{Packet, PacketType, RawPacket};
+use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
 use core::convert::TryFrom;
 use std::convert::TryInto;

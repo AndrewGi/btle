@@ -84,7 +84,7 @@ impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> futures_core::s
     type Item = Result<RawPacket<Buf>, Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut this = &mut *self;
+        let this = &mut *self;
         Pin::new(&mut this.adapter.stream.read_packet(this.buf.as_mut()))
             .poll(cx)
             .map(|r| Some(r.map(|p| p.clone_buf()).map_err(Error::StreamError)))

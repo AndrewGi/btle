@@ -14,7 +14,7 @@ pub mod stream;
 use crate::bytes::ToFromBytesEndian;
 use crate::error;
 use core::convert::{TryFrom, TryInto};
-use std::fmt::{Error, Formatter};
+use std::fmt::Formatter;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct HCIVersionError(());

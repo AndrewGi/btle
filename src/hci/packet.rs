@@ -68,7 +68,7 @@ pub trait Packet {
     /// Automatically trims `buf` to the correct len.
     fn packet_pack_full(&self, buf: &mut [u8]) -> Result<usize, HCIPackError> {
         let full = self.packet_byte_len() + 1;
-        let mut buf = &mut buf[..full];
+        let buf = &mut buf[..full];
         HCIPackError::expect_length(full, buf)?;
         self.packet_pack_into(&mut buf[1..])?;
         buf[0] = Self::PACKET_TYPE.into();

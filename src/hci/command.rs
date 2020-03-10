@@ -1,5 +1,5 @@
 use crate::hci::event::ReturnParameters;
-use crate::hci::packet::{Packet, PacketType};
+use crate::hci::packet::PacketType;
 use crate::hci::{HCIPackError, Opcode, OPCODE_LEN};
 use core::convert::TryFrom;
 
@@ -22,7 +22,7 @@ pub trait Command {
     fn pack_full(&self, buf: &mut [u8]) -> Result<usize, HCIPackError> {
         let full = self.full_len();
         // Trim buf to correct length
-        let mut buf = &mut buf[..full];
+        let buf = &mut buf[..full];
         HCIPackError::expect_length(full, buf)?;
         self.pack_into(&mut buf[3..full])?;
         Self::opcode().pack(&mut buf[..OPCODE_LEN])?;
