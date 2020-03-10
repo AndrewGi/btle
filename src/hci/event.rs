@@ -1,6 +1,8 @@
-use crate::hci::stream::PacketType;
+use crate::bytes::Storage;
+use crate::hci::packet::{Packet, PacketType, RawPacket};
 use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
 use core::convert::TryFrom;
+use std::convert::TryInto;
 use std::fmt::Formatter;
 
 /// HCI Event Code. 8-bit code corresponding to an HCI Event. Check the Bluetooth Core Spec for more.
@@ -156,29 +158,40 @@ impl TryFrom<u8> for EventCode {
 }
 pub trait Event {
     const CODE: EventCode;
+    /// The byte length of the `Event` parameters.
     fn byte_len(&self) -> usize;
     fn full_len(&self) -> usize {
-        self.byte_len() + EVENT_CODE_LEN + 2
+        self.byte_len() + EVENT_CODE_LEN + 1
     }
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
-    fn pack_full(&self, buf: &mut [u8]) -> Result<usize, HCIPackError> {
-        let full = self.full_len();
-        HCIPackError::expect_length(full, buf)?;
-        self.pack_into(&mut buf[3..])?;
-        buf[0] = PacketType::Event.into();
-        buf[1] = Self::CODE.into();
-        buf[2] = u8::try_from(self.byte_len()).expect("events can only have 0xFF parameter bytes");
-        Ok(full)
-    }
+    /// Unpack the `Event` from a byte buffer.
     fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
     where
         Self: Sized;
+    fn unpack_event_packet<S: AsRef<[u8]>>(packet: &EventPacket<S>) -> Result<Self, HCIPackError>
+    where
+        Self: Sized,
+    {
+        if packet.event_code != Self::CODE {
+            Err(HCIPackError::BadOpcode)
+        } else {
+            Self::unpack_from(packet.parameters())
+        }
+    }
+    /// Pack the `Event` parameters into a byte buffer.
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
+    fn pack_event_packet<S: Storage>(&self) -> Result<EventPacket<S>, HCIPackError> {
+        let mut out = S::with_size(self.full_len());
+        self.pack_into(out.as_mut())?;
+        Ok(EventPacket {
+            event_code: Self::CODE,
+            parameters: out,
+        })
+    }
 }
-
 /// Unprocessed HCI Event Packet
 pub struct EventPacket<Storage: AsRef<[u8]>> {
-    event_code: EventCode,
-    parameters: Storage,
+    pub event_code: EventCode,
+    pub parameters: Storage,
 }
 impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
     pub fn new(opcode: EventCode, parameters: Storage) -> Self {
@@ -195,6 +208,26 @@ impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
     }
     pub fn take_parameters(self) -> Storage {
         self.parameters
+    }
+}
+impl<'a> TryFrom<RawPacket<&'a [u8]>> for EventPacket<&'a [u8]> {
+    type Error = HCIPackError;
+
+    fn try_from(packet: RawPacket<&'a [u8]>) -> Result<Self, Self::Error> {
+        if packet.packet_type != PacketType::Event {
+            Err(HCIPackError::BadOpcode)
+        } else {
+            match packet.buf.get(0) {
+                None => Err(HCIPackError::BadLength {
+                    expected: 1,
+                    got: 0,
+                }),
+                Some(&b) => Ok(EventPacket::new(
+                    b.try_into().ok().ok_or(HCIPackError::bad_index(0))?,
+                    &packet.buf[1..],
+                )),
+            }
+        }
     }
 }
 impl<Storage: AsRef<[u8]>> core::fmt::Debug for EventPacket<Storage> {

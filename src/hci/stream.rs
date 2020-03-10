@@ -2,51 +2,19 @@ use crate::bytes::Storage;
 use crate::error;
 use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
-use crate::hci::stream::Error::UnsupportedPacketType;
-use crate::hci::{HCIConversionError, HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
+use crate::hci::packet::{PacketType, RawPacket};
+use crate::hci::{HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
 use core::convert::{TryFrom, TryInto};
 use core::pin::Pin;
 use core::task::{Context, Poll};
 
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
-#[repr(u8)]
-pub enum PacketType {
-    Command = 0x01,
-    ACLData = 0x02,
-    SCOData = 0x03,
-    Event = 0x04,
-    Vendor = 0xFF,
-}
-impl From<PacketType> for u8 {
-    fn from(packet_type: PacketType) -> Self {
-        packet_type as u8
-    }
-}
-impl From<PacketType> for u32 {
-    fn from(packet_type: PacketType) -> Self {
-        packet_type as u32
-    }
-}
-impl TryFrom<u8> for PacketType {
-    type Error = HCIConversionError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0x01 => Ok(PacketType::Command),
-            0x02 => Ok(PacketType::ACLData),
-            0x03 => Ok(PacketType::SCOData),
-            0x04 => Ok(PacketType::Event),
-            0xFF => Ok(PacketType::Vendor),
-            _ => Err(HCIConversionError(())),
-        }
-    }
-}
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
 pub enum Error {
     CommandError(HCIPackError),
     UnsupportedPacketType(u8),
     BadOpcode,
     BadEventCode,
+    BadPacketCode,
     StreamClosed,
     StreamFailed,
     IOError,
@@ -159,7 +127,7 @@ pub trait HCIWriter {
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>>;
 }
 /// Asynchronous HCI byte stream reader.
-pub trait HCIReader {
+pub trait HCIReader: Unpin {
     /// Read some bytes into `buf`. Mirrors an `AsyncRead` trait. Returns `Ok(usize)` with actual
     /// bytes read.
     fn poll_read(
@@ -168,11 +136,11 @@ pub trait HCIReader {
         buf: &mut [u8],
     ) -> Poll<Result<usize, Error>>;
 }
-pub struct Stream<S: HCIReader + HCIFilterable> {
+pub struct Stream<S: HCIReader> {
     pub stream: S,
 }
 pub const HCI_EVENT_READ_TRIES: usize = 10;
-impl<S: HCIReader + HCIFilterable> Stream<S> {
+impl<S: HCIReader> Stream<S> {
     pub fn new(stream: S) -> Self {
         Self { stream }
     }
@@ -192,14 +160,15 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
         }
         futures_util::future::poll_fn(|cx| self.as_mut().stream_pinned().poll_flush(cx)).await
     }
-    pub async fn send_command<Cmd: Command, Buf: Storage>(
+    pub async fn send_command<Cmd: Command>(
         mut self: Pin<&mut Self>,
         command: Cmd,
     ) -> Result<CommandComplete<Cmd::Return>, Error>
     where
-        S: HCIWriter,
+        S: HCIWriter + HCIFilterable,
     {
-        let mut buf = [0_u8; FULL_COMMAND_MAX_LEN];
+        const BUF_LEN: usize = FULL_COMMAND_MAX_LEN;
+        let mut buf = [0_u8; BUF_LEN];
         let len = command.full_len();
         // Pack Command
         command
@@ -229,7 +198,8 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
 
         // Wait for response
         for _try_i in 0..HCI_EVENT_READ_TRIES {
-            let event: EventPacket<Buf> = self.as_mut().read_event().await?;
+            // Reuse `buf` to read the RawPacket
+            let event = EventPacket::try_from(self.as_mut().read_packet(&mut buf[..]).await?)?;
             println!("event: {:?}", event);
             if event.event_code() == CommandComplete::<Cmd::Return>::CODE {
                 if Opcode::unpack(&event.parameters().as_ref()[1..3])? == Cmd::opcode() {
@@ -241,34 +211,54 @@ impl<S: HCIReader + HCIFilterable> Stream<S> {
         }
         Err(Error::StreamFailed)
     }
-    pub async fn read_exact(mut self: Pin<&mut Self>, mut buf: &mut [u8]) -> Result<(), Error> {
-        while !buf.is_empty() {
-            let amount = futures_util::future::poll_fn(|cx| {
-                self.as_mut().stream_pinned().poll_read(cx, buf)
-            })
-            .await?;
-            buf = &mut buf[amount..];
-        }
-        Ok(())
+    pub async fn read_bytes(mut self: Pin<&mut Self>, buf: &mut [u8]) -> Result<usize, Error> {
+        futures_util::future::poll_fn(|cx| self.as_mut().stream_pinned().poll_read(cx, buf)).await
     }
-    pub async fn read_event<Buf: Storage>(
-        mut self: Pin<&mut Self>,
-    ) -> Result<EventPacket<Buf>, Error> {
-        let mut header = [0_u8; EVENT_HEADER_LEN + 3];
-        self.as_mut().read_exact(&mut header[..]).await?;
-        if header[0] != u8::from(PacketType::Event) {
-            return Err(UnsupportedPacketType(header[0]));
+    pub fn read_packet<'r, 'b>(&'r mut self, buf: &'b mut [u8]) -> ByteRead<'b, 'r, S> {
+        ByteRead::new(&mut self.stream, buf)
+    }
+}
+pub struct ByteRead<'b: 'r, 'r, R: HCIReader> {
+    buf: Option<&'b mut [u8]>,
+    reader: &'r mut R,
+}
+impl<'b: 'r, 'r, R: HCIReader> ByteRead<'b, 'r, R> {
+    pub fn new(reader: &'r mut R, buf: &'b mut [u8]) -> Self {
+        Self {
+            buf: Some(buf),
+            reader,
         }
-        let event_code = EventCode::try_from(header[1]).map_err(|_| Error::BadEventCode)?;
-        let len = header[0];
-        let mut buf = Buf::with_size(len.into());
-        self.read_exact(buf.as_mut()).await?;
-        Ok(EventPacket::new(event_code, buf))
+    }
+}
+impl<'b: 'r, 'r, R: HCIReader> core::future::Future for ByteRead<'b, 'r, R> {
+    type Output = Result<RawPacket<&'b [u8]>, Error>;
+
+    fn poll(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<RawPacket<&'b [u8]>, Error>> {
+        let this = &mut *self;
+        let buf = match &mut this.buf {
+            None => return Poll::Ready(Err(Error::StreamFailed)),
+            Some(b) => b,
+        };
+        let len = match Pin::new(&mut *this.reader).poll_read(cx, *buf) {
+            Poll::Ready(r) => match r {
+                Ok(l) => l,
+                Err(e) => return Poll::Ready(Err(e)),
+            },
+            Poll::Pending => return Poll::Pending,
+        };
+        debug_assert!(len < buf.len(), "there might be more bytes to read");
+        Poll::Ready(
+            RawPacket::try_from(&this.buf.take().expect("just used above")[..len])
+                .map_err(|_| Error::BadPacketCode),
+        )
     }
 }
 const EVENT_HEADER_LEN: usize = 3;
 #[cfg(feature = "std")]
-impl<T: futures_io::AsyncRead> HCIReader for T {
+impl<T: futures_io::AsyncRead + Unpin> HCIReader for T {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,

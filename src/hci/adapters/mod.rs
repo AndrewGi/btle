@@ -1,12 +1,15 @@
 pub mod le;
 use crate::bytes::Storage;
 use crate::hci::command::Command;
-use crate::hci::event::{CommandComplete, EventPacket};
+use crate::hci::event::CommandComplete;
+use crate::hci::packet::RawPacket;
 use crate::hci::stream::{HCIFilterable, HCIReader, HCIWriter, Stream};
 use crate::hci::{stream, ErrorCode};
 use crate::{error, hci};
 use core::fmt::Formatter;
+use core::future::Future;
 use core::pin::Pin;
+use futures_task::{Context, Poll};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum Error {
@@ -29,11 +32,11 @@ impl core::fmt::Display for Error {
     }
 }
 impl error::Error for Error {}
-pub struct Adapter<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> {
+pub struct Adapter<S: HCIWriter + HCIReader + HCIFilterable> {
     pub stream: Stream<S>,
-    _marker: core::marker::PhantomData<Buf>,
+    _marker: (),
 }
-impl<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> Adapter<S, Buf> {
+impl<S: HCIWriter + HCIReader + HCIFilterable> Adapter<S> {
     pub fn new(stream: Stream<S>) -> Self {
         Self {
             stream,
@@ -46,7 +49,7 @@ impl<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> Adapter<S, Buf> {
     fn stream_pinned(self: Pin<&mut Self>) -> Pin<&mut Stream<S>> {
         unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().stream) }
     }
-    pub fn le(self: Pin<&mut Self>) -> le::LEAdapter<S, Buf> {
+    pub fn le(self: Pin<&mut Self>) -> le::LEAdapter<S> {
         le::LEAdapter::new(self)
     }
     pub async fn send_command<Cmd: Command>(
@@ -54,28 +57,36 @@ impl<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> Adapter<S, Buf> {
         command: Cmd,
     ) -> Result<CommandComplete<Cmd::Return>, Error> {
         self.stream_pinned()
-            .send_command::<Cmd, Buf>(command)
+            .send_command::<Cmd>(command)
             .await
             .map_err(Error::StreamError)
     }
-    pub fn with_buf<NewBuf: Storage>(self) -> Adapter<S, NewBuf> {
-        Adapter {
-            stream: self.stream,
-            _marker: Default::default(),
-        }
-    }
-    pub async fn read_event(self: Pin<&mut Self>) -> Result<EventPacket<Buf>, Error> {
-        Ok(self.stream_pinned().read_event().await?)
-    }
 }
-impl<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> AsRef<Stream<S>> for Adapter<S, Buf> {
+impl<S: HCIWriter + HCIReader + HCIFilterable> AsRef<Stream<S>> for Adapter<S> {
     fn as_ref(&self) -> &Stream<S> {
         &self.stream
     }
 }
 
-impl<S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> AsMut<Stream<S>> for Adapter<S, Buf> {
+impl<S: HCIWriter + HCIReader + HCIFilterable> AsMut<Stream<S>> for Adapter<S> {
     fn as_mut(&mut self) -> &mut Stream<S> {
         &mut self.stream
+    }
+}
+
+pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> {
+    adapter: &'a mut Adapter<S>,
+    buf: Buf,
+}
+impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> futures_core::stream::Stream
+    for PacketStream<'a, S, Buf>
+{
+    type Item = Result<RawPacket<Buf>, Error>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut this = &mut *self;
+        Pin::new(&mut this.adapter.stream.read_packet(this.buf.as_mut()))
+            .poll(cx)
+            .map(|r| Some(r.map(|p| p.clone_buf()).map_err(Error::StreamError)))
     }
 }

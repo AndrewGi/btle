@@ -5,6 +5,7 @@ pub mod command;
 pub mod event;
 pub mod le;
 pub mod link_control;
+pub mod packet;
 #[cfg(all(feature = "remote"))]
 pub mod remote;
 #[cfg(all(unix, feature = "std"))]
@@ -13,6 +14,7 @@ pub mod stream;
 use crate::bytes::ToFromBytesEndian;
 use crate::error;
 use core::convert::{TryFrom, TryInto};
+use std::fmt::{Error, Formatter};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct HCIVersionError(());
@@ -159,6 +161,77 @@ impl ErrorCode {
             ErrorCode::Ok => Ok(()),
             e => Err(e),
         }
+    }
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ErrorCode::Ok => "Ok",
+            ErrorCode::UnknownHCICommand => "UnknownHCICommand",
+            ErrorCode::NoConnection => "NoConnection",
+            ErrorCode::HardwareFailure => "HardwareFailure",
+            ErrorCode::PageTimeout => "PageTimeout",
+            ErrorCode::AuthenticationFailure => "AuthenticationFailure",
+            ErrorCode::KeyMissing => "KeyMissing",
+            ErrorCode::MemoryFull => "MemoryFull",
+            ErrorCode::ConnectionTimeout => "ConnectionTimeout",
+            ErrorCode::MaxNumberOfConnections => "MaxNumberOfConnections",
+            ErrorCode::MaxNumberOfSCOConnectionsToADevice => "MaxNumberOfSCOConnectionsToADevice",
+            ErrorCode::ACLConnectionAlreadyExists => "ACLConnectionAlreadyExists",
+            ErrorCode::CommandDisallowed => "CommandDisallowed",
+            ErrorCode::HostRejectedDueToLimitedResources => "HostRejectedDueToLimitedResources",
+            ErrorCode::HostRejectedDueToSecurityReasons => "HostRejectedDueToSecurityReasons",
+            ErrorCode::HostRejectedDueToARemoteDeviceOnlyAPersonalDevice => {
+                "HostRejectedDueToARemoteDeviceOnlyAPersonalDevice"
+            }
+            ErrorCode::HostTimeout => "HostTimeout",
+            ErrorCode::UnsupportedFeatureOrParameterValue => "UnsupportedFeatureOrParameterValue",
+            ErrorCode::InvalidHCICommandParameters => "InvalidHCICommandParameters",
+            ErrorCode::OtherEndTerminatedConnectionUserEndedConnection => {
+                "OtherEndTerminatedConnectionUserEndedConnection"
+            }
+            ErrorCode::OtherEndTerminatedConnectionLowResources => {
+                "OtherEndTerminatedConnectionLowResources"
+            }
+            ErrorCode::OtherEndTerminatedConnectionAboutToPowerOff => {
+                "OtherEndTerminatedConnectionAboutToPowerOff"
+            }
+            ErrorCode::ConnectionTerminatedByLocalHost => "ConnectionTerminatedByLocalHost",
+            ErrorCode::RepeatedAttempts => "RepeatedAttempts",
+            ErrorCode::PairingNotAllowed => "PairingNotAllowed",
+            ErrorCode::UnknownLMPPDU => "UnknownLMPPDU",
+            ErrorCode::UnsupportedRemoteFeature => "UnsupportedRemoteFeature",
+            ErrorCode::SCOOffsetRejected => "SCOOffsetRejected",
+            ErrorCode::SCOIntervalRejected => "SCOIntervalRejected",
+            ErrorCode::SCOAirModeRejected => "SCOAirModeRejected",
+            ErrorCode::InvalidLMPParameters => "InvalidLMPParameters",
+            ErrorCode::UnspecifiedError => "UnspecifiedError",
+            ErrorCode::UnsupportedLMPParameter => "UnsupportedLMPParameter",
+            ErrorCode::RoleChangeNotAllowed => "RoleChangeNotAllowed",
+            ErrorCode::LMPResponseTimeout => "LMPResponseTimeout",
+            ErrorCode::LMPErrorTransactionCollision => "LMPErrorTransactionCollision",
+            ErrorCode::LMPPDUNotAllowed => "LMPPDUNotAllowed",
+            ErrorCode::EncryptionModeNotAcceptable => "EncryptionModeNotAcceptable",
+            ErrorCode::UnitKeyUsed => "UnitKeyUsed",
+            ErrorCode::QoSNotSupported => "QoSNotSupported",
+            ErrorCode::InstantPassed => "InstantPassed",
+            ErrorCode::PairingWithUnitKeyNotSupported => "PairingWithUnitKeyNotSupported",
+            ErrorCode::TransactionCollision => "TransactionCollision",
+            ErrorCode::QOSUnacceptableParameter => "QOSUnacceptableParameter",
+            ErrorCode::QOSRejected => "QOSRejected",
+            ErrorCode::ClassificationNotSupported => "ClassificationNotSupported",
+            ErrorCode::InsufficientSecurity => "InsufficientSecurity",
+            ErrorCode::ParameterOutOfRange => "ParameterOutOfRange",
+            ErrorCode::RoleSwitchPending => "RoleSwitchPending",
+            ErrorCode::SlotViolation => "SlotViolation",
+            ErrorCode::RoleSwitchFailed => "RoleSwitchFailed",
+            ErrorCode::EIRTooLarge => "EIRTooLarge",
+            ErrorCode::SimplePairingNotSupported => "SimplePairingNotSupported",
+            ErrorCode::HostBusyPairing => "HostBusyPairing",
+        }
+    }
+}
+impl core::fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 impl From<ErrorCode> for u8 {
@@ -334,7 +407,7 @@ impl TryFrom<u16> for Opcode {
 }
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum HCIPackError {
-    BadOpcode { expected: Opcode, got: u16 },
+    BadOpcode,
     BadLength { expected: usize, got: usize },
     BadBytes { index: Option<usize> },
     InvalidFields,

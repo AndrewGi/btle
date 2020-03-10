@@ -1,21 +1,20 @@
-use crate::bytes::Storage;
 use crate::hci::adapters;
 use crate::hci::event::{CommandComplete, StatusReturn};
 use crate::hci::le;
 use crate::hci::stream::{HCIFilterable, HCIReader, HCIWriter};
 use core::pin::Pin;
 
-pub struct LEAdapter<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> {
-    adapter: Pin<&'a mut adapters::Adapter<S, Buf>>,
+pub struct LEAdapter<'a, S: HCIWriter + HCIReader + HCIFilterable> {
+    adapter: Pin<&'a mut adapters::Adapter<S>>,
 }
-impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> LEAdapter<'a, S, Buf> {
-    pub fn new(adapter: Pin<&'a mut adapters::Adapter<S, Buf>>) -> Self {
+impl<'a, S: HCIWriter + HCIReader + HCIFilterable> LEAdapter<'a, S> {
+    pub fn new(adapter: Pin<&'a mut adapters::Adapter<S>>) -> Self {
         Self { adapter }
     }
-    pub fn adapter_mut(&mut self) -> Pin<&mut adapters::Adapter<S, Buf>> {
+    pub fn adapter_mut(&mut self) -> Pin<&mut adapters::Adapter<S>> {
         self.adapter.as_mut()
     }
-    pub fn adapter_ref(&self) -> Pin<&adapters::Adapter<S, Buf>> {
+    pub fn adapter_ref(&self) -> Pin<&adapters::Adapter<S>> {
         self.adapter.as_ref()
     }
     pub async fn set_scan_enabled(
