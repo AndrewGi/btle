@@ -2,7 +2,7 @@ use crate::advertisement::MAX_ADV_LEN;
 use crate::bytes::{StaticBuf, Storage};
 use crate::hci::le::{MetaEvent, MetaEventCode};
 use crate::{BTAddress, ConversionError, PackError, BT_ADDRESS_LEN, RSSI};
-use std::convert::TryFrom;
+use core::convert::TryFrom;
 
 pub struct NumReports(u8);
 impl NumReports {
@@ -99,6 +99,17 @@ pub struct ReportInfo<T: AsRef<[u8]>> {
     pub address: BTAddress,
     pub data: T,
     pub rssi: Option<RSSI>,
+}
+impl<T: AsRef<[u8]>> core::fmt::Debug for ReportInfo<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ReportInfo")
+            .field("event_type", &self.event_type)
+            .field("address_type", &self.address_type)
+            .field("address", &self.address)
+            .field("rssi", &self.rssi)
+            .field("data", &self.data.as_ref())
+            .finish()
+    }
 }
 impl<T: AsRef<[u8]> + Copy> Copy for ReportInfo<T> {}
 impl<T: AsRef<[u8]> + Clone> Clone for ReportInfo<T> {
@@ -200,8 +211,8 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
             if usize::from(data_len) > MAX_ADV_LEN {
                 return Err(PackError::bad_index(data_len_index));
             }
-            PackError::expect_length(data_index_end, buf)?;
             let data = &buf[data_index..data_index_end];
+            PackError::expect_length(data_len.into(), data)?;
             out.reports.as_mut()[i] = ReportInfo {
                 event_type,
                 address_type,
@@ -212,7 +223,7 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
             total_data_len += usize::from(data_len);
         }
         for i in 0..reports_len {
-            let rssi_index = total_data_len + i;
+            let rssi_index = 1 + (1 + 1 + 1 + BT_ADDRESS_LEN) * reports_len + total_data_len + i;
             out.reports.as_mut()[i].rssi =
                 match buf.get(rssi_index).map(|val| RSSI::maybe_rssi(*val as i8)) {
                     Some(Ok(maybe_rssi)) => maybe_rssi,
@@ -252,7 +263,7 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
             total_data_len += data_len;
         }
         for i in 0..reports_len {
-            let rssi_index = total_data_len + i;
+            let rssi_index = 1 + (1 + 1 + 1 + BT_ADDRESS_LEN) * reports_len + total_data_len + i;
             buf[rssi_index] = reports[i]
                 .rssi
                 .map(i8::from)

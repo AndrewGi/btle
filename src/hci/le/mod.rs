@@ -207,7 +207,7 @@ impl<M: MetaEvent> Event for M {
     where
         Self: Sized,
     {
-        if u8::from(Self::CODE)
+        if u8::from(Self::META_CODE)
             == *buf.get(0).ok_or(PackError::BadLength {
                 expected: 1,
                 got: 0,

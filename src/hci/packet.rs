@@ -41,6 +41,14 @@ pub struct RawPacket<Buf: AsRef<[u8]>> {
     pub buf: Buf,
 }
 impl<Buf: AsRef<[u8]>> RawPacket<Buf> {
+    pub fn as_ref(&self) -> RawPacket<&[u8]> {
+        RawPacket {
+            packet_type: self.packet_type,
+            buf: self.buf.as_ref(),
+        }
+    }
+}
+impl<Buf: AsRef<[u8]>> RawPacket<Buf> {
     pub fn clone_buf<S: Storage<u8>>(&self) -> RawPacket<S> {
         RawPacket {
             packet_type: self.packet_type,
