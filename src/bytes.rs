@@ -350,7 +350,6 @@ impl<T: Copy + Unpin + Default, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Co
             _marker: core::marker::PhantomData,
         }
     }
-
     fn len(&self) -> usize {
         self.len
     }

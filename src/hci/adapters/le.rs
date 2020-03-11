@@ -1,7 +1,8 @@
 use crate::bytes::Storage;
-use crate::hci::event::{Event, EventPacket};
+use crate::hci::event::{Event, EventPacket, StaticEventBuffer};
 use crate::hci::le;
 use crate::hci::le::random::RAND_LEN;
+use crate::hci::le::report::StaticAdvBuffer;
 use crate::hci::packet::RawPacket;
 use crate::hci::stream::HCIStreamable;
 use crate::hci::{adapters, stream};
@@ -73,11 +74,11 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     /// `le::report::ReportInfo<le::report::StaticAdvBuffer>>`. Make sure you set scan parameters
     /// and a `Filter` before calling this.
     pub fn advertisement_stream<
-        't,
+        'b,
         Buf: Storage<le::report::ReportInfo<le::report::StaticAdvBuffer>>,
     >(
-        &'t mut self,
-    ) -> AdvertisementStream<'t, 'a, S, Buf> {
+        &'b mut self,
+    ) -> AdvertisementStream<'b, 'a, S, Buf> {
         AdvertisementStream::new(self)
     }
 }
@@ -85,20 +86,22 @@ pub struct AdvertisementStream<
     'a,
     'b: 'a,
     S: HCIStreamable,
-    Buf: Storage<le::report::ReportInfo<PacketBuf>>,
-    PacketBuf: Storage<u8> + Copy + Default = le::report::StaticAdvBuffer,
+    Buf: Storage<le::report::ReportInfo<ReportBuf>>,
+    ReportBuf: Storage<u8> + Copy + Default = StaticAdvBuffer,
+    PacketBuf: Storage<u8> = StaticEventBuffer,
 > {
     adapter: &'a mut LEAdapter<'b, S>,
-    last_report: Option<(le::AdvertisingReport<Buf, PacketBuf>, usize)>,
+    last_report: Option<(le::AdvertisingReport<Buf, ReportBuf>, usize)>,
     marker_: core::marker::PhantomData<PacketBuf>,
 }
 impl<
         'a,
         'b: 'a,
         S: HCIStreamable,
-        Buf: Storage<le::report::ReportInfo<PacketBuf>>,
-        PacketBuf: Storage<u8> + Copy + Default,
-    > AdvertisementStream<'a, 'b, S, Buf, PacketBuf>
+        Buf: Storage<le::report::ReportInfo<ReportBuf>>,
+        ReportBuf: Storage<u8> + Copy + Default,
+        PacketBuf: Storage<u8>,
+    > AdvertisementStream<'a, 'b, S, Buf, ReportBuf, PacketBuf>
 {
     pub fn new(adapter: &'a mut LEAdapter<'b, S>) -> Self {
         Self {
@@ -112,11 +115,12 @@ impl<
         'a,
         'b: 'a,
         S: HCIStreamable,
-        Buf: Storage<le::report::ReportInfo<PacketBuf>>,
-        PacketBuf: Storage<u8> + Copy + Default,
-    > futures_core::Stream for AdvertisementStream<'a, 'b, S, Buf, PacketBuf>
+        Buf: Storage<le::report::ReportInfo<ReportBuf>>,
+        ReportBuf: Storage<u8> + Copy + Default,
+        PacketBuf: Storage<u8>,
+    > futures_core::Stream for AdvertisementStream<'a, 'b, S, Buf, ReportBuf, PacketBuf>
 {
-    type Item = Result<le::report::ReportInfo<PacketBuf>, adapters::Error>;
+    type Item = Result<le::report::ReportInfo<ReportBuf>, adapters::Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = &mut *self;

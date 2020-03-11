@@ -1,6 +1,6 @@
-use crate::bytes::Storage;
+use crate::bytes::{StaticBuf, Storage};
 use crate::hci::packet::{PacketType, RawPacket};
-use crate::hci::{ErrorCode, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
+use crate::hci::{ErrorCode, Opcode, EVENT_CODE_LEN, EVENT_MAX_LEN, OPCODE_LEN};
 use crate::{ConversionError, PackError};
 use core::convert::TryFrom;
 use std::fmt::Formatter;
@@ -188,6 +188,32 @@ pub trait Event {
         })
     }
 }
+#[derive(Copy, Clone)]
+pub struct FullEventBuffer(pub [u8; EVENT_MAX_LEN]);
+impl FullEventBuffer {
+    pub const DEFAULT: FullEventBuffer = FullEventBuffer([0_u8; EVENT_MAX_LEN]);
+}
+impl Default for FullEventBuffer {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+impl AsRef<[u8]> for FullEventBuffer {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+impl AsMut<[u8]> for FullEventBuffer {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
+    }
+}
+impl From<FullEventBuffer> for [u8; EVENT_MAX_LEN] {
+    fn from(b: FullEventBuffer) -> Self {
+        b.0
+    }
+}
+pub type StaticEventBuffer = StaticBuf<u8, FullEventBuffer>;
 /// Unprocessed HCI Event Packet
 pub struct EventPacket<Storage: AsRef<[u8]>> {
     pub event_code: EventCode,
