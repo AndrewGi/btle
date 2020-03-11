@@ -1,6 +1,6 @@
 use crate::hci::adapters;
-use crate::hci::event::{CommandComplete, StatusReturn};
 use crate::hci::le;
+use crate::hci::le::random::RAND_LEN;
 use crate::hci::stream::{HCIFilterable, HCIReader, HCIWriter};
 use core::pin::Pin;
 
@@ -36,15 +36,31 @@ impl<'a, S: HCIWriter + HCIReader + HCIFilterable> LEAdapter<'a, S> {
     pub async fn set_scan_parameters(
         &mut self,
         scan_parameters: le::SetScanParameters,
-    ) -> Result<CommandComplete<StatusReturn>, adapters::Error> {
-        self.adapter_mut().send_command(scan_parameters).await
+    ) -> Result<(), adapters::Error> {
+        self.adapter_mut()
+            .send_command(scan_parameters)
+            .await?
+            .params
+            .status
+            .error()?;
+        Ok(())
     }
     pub async fn set_advertising_enabled(
         &mut self,
         is_enabled: bool,
-    ) -> Result<CommandComplete<StatusReturn>, adapters::Error> {
+    ) -> Result<(), adapters::Error> {
         self.adapter_mut()
             .send_command(le::SetAdvertisingEnable { is_enabled })
-            .await
+            .await?
+            .params
+            .status
+            .error()?;
+        Ok(())
+    }
+    /// Get `RAND_LEN` (8) bytes from the HCI Controller.
+    pub async fn get_rand(&mut self) -> Result<[u8; RAND_LEN], adapters::Error> {
+        let r = self.adapter_mut().send_command(le::Rand {}).await?;
+        r.params.status.error()?;
+        Ok(r.params.random_bytes)
     }
 }

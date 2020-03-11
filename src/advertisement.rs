@@ -1,5 +1,5 @@
 use crate::advertisement::AdStructure::Unknown;
-use crate::RSSI;
+use crate::MilliDBM;
 use core::convert::TryFrom;
 use core::mem;
 
@@ -197,12 +197,12 @@ impl RawAdStructureBuffer {
         &self.data[..self.len]
     }
 }
-const MAX_ADV_LEN: usize = 31;
+pub const MAX_ADV_LEN: usize = 31;
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Default, Hash, Debug)]
 pub struct RawAdvertisement {
     buf: [u8; MAX_ADV_LEN],
     len: usize,
-    rssi: Option<RSSI>,
+    rssi: Option<MilliDBM>,
 }
 impl RawAdvertisement {
     /// Inserts a `AdStructure` into a `RawAdvertisement`
@@ -238,7 +238,7 @@ impl RawAdvertisement {
             data: self.as_ref(),
         }
     }
-    pub fn rssi(&self) -> Option<RSSI> {
+    pub fn rssi(&self) -> Option<MilliDBM> {
         self.rssi
     }
 }
@@ -249,13 +249,13 @@ impl AsRef<[u8]> for RawAdvertisement {
 }
 pub struct IncomingAdvertisement {
     adv: RawAdvertisement,
-    rssi: Option<RSSI>,
+    rssi: Option<MilliDBM>,
 }
 impl IncomingAdvertisement {
     pub fn adv(&self) -> &RawAdvertisement {
         &self.adv
     }
-    pub fn rssi(&self) -> Option<RSSI> {
+    pub fn rssi(&self) -> Option<MilliDBM> {
         self.rssi
     }
 }

@@ -60,7 +60,7 @@ impl<R: HCIWriter + HCIReader + HCIFilterable> Adapter<R> {
             .map_err(Error::StreamError)
     }
     /// Read a
-    pub async fn read_packet<S: Storage>(self: Pin<&mut Self>) -> Result<RawPacket<S>, Error> {
+    pub async fn read_packet<S: Storage<u8>>(self: Pin<&mut Self>) -> Result<RawPacket<S>, Error> {
         const PACKET_SIZE: usize = 255 + 2;
         let mut buf = [0_u8; PACKET_SIZE];
         Ok(self

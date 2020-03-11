@@ -12,7 +12,7 @@ pub mod remote;
 pub mod socket;
 pub mod stream;
 use crate::bytes::ToFromBytesEndian;
-use crate::error;
+use crate::{ConversionError, PackError};
 use core::convert::{TryFrom, TryInto};
 use std::fmt::Formatter;
 
@@ -24,7 +24,7 @@ pub const MAX_SCO_SIZE: usize = 255;
 pub const MAX_EVENT_SIZE: usize = 260;
 pub const MAX_FRAME_SIZE: usize = MAX_ACL_SIZE + 4;
 
-pub enum DevEvent {
+pub enum DeviceEvent {
     Reg = 1,
     Unreg = 2,
     Up = 3,
@@ -49,6 +49,7 @@ pub enum ControllerType {
 /// the future once they are released.
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug, Hash)]
 #[repr(u8)]
+#[non_exhaustive]
 pub enum Version {
     Bluetooth1v0b = 0,
     Bluetooth1v1 = 1,
@@ -89,8 +90,6 @@ impl TryFrom<u8> for Version {
         }
     }
 }
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct HCIConversionError(());
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[repr(u8)]
 pub enum ErrorCode {
@@ -240,7 +239,7 @@ impl From<ErrorCode> for u8 {
     }
 }
 impl TryFrom<u8> for ErrorCode {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -286,7 +285,7 @@ impl TryFrom<u8> for ErrorCode {
             0x27 => Ok(ErrorCode::QoSNotSupported),
             0x28 => Ok(ErrorCode::InstantPassed),
             0x29 => Ok(ErrorCode::PairingWithUnitKeyNotSupported),
-            _ => Err(HCIConversionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }
@@ -319,7 +318,7 @@ impl From<OGF> for u8 {
     }
 }
 impl TryFrom<u8> for OGF {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -332,7 +331,7 @@ impl TryFrom<u8> for OGF {
             0x06 => Ok(OGF::Testing),
             0x08 => Ok(OGF::LEController),
             0x3F => Ok(OGF::VendorSpecific),
-            _ => Err(HCIConversionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }
@@ -368,21 +367,21 @@ impl Opcode {
     }
     /// # Errors
     /// returns `HCIPackError::BadLength` if `buf.len() != OPCODE_LEN`.
-    pub fn pack(self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        HCIPackError::expect_length(OPCODE_LEN, buf)?;
+    pub fn pack(self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(OPCODE_LEN, buf)?;
         buf[..2].copy_from_slice(&u16::from(self).to_bytes_le());
         Ok(())
     }
     /// # Errors
     /// returns `HCIPackError::BadLength` if `buf.len() != OPCODE_LEN`.
     /// returns `HCIPackError::BadBytes` if `buf` doesn't contain a value opcode.
-    pub fn unpack(buf: &[u8]) -> Result<Opcode, HCIPackError> {
-        HCIPackError::expect_length(OPCODE_LEN, buf)?;
+    pub fn unpack(buf: &[u8]) -> Result<Opcode, PackError> {
+        PackError::expect_length(OPCODE_LEN, buf)?;
         Ok(u16::from_bytes_le(&buf)
             .expect("length checked above")
             .try_into()
             .ok()
-            .ok_or(HCIPackError::BadBytes { index: Some(0) })?)
+            .ok_or(PackError::BadBytes { index: Some(0) })?)
     }
     pub const fn nop() -> Opcode {
         Opcode(OGF::NOP, OCF(0))
@@ -397,7 +396,7 @@ impl From<Opcode> for u16 {
     }
 }
 impl TryFrom<u16> for Opcode {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
         let ogf = OGF::try_from(u8::try_from(value >> 10).expect("OGF is 6-bits"))?;
@@ -405,31 +404,3 @@ impl TryFrom<u16> for Opcode {
         Ok(Opcode(ogf, ocf))
     }
 }
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub enum HCIPackError {
-    BadOpcode,
-    BadLength { expected: usize, got: usize },
-    BadBytes { index: Option<usize> },
-    InvalidFields,
-}
-impl HCIPackError {
-    /// Ensure `buf.len() == expected`. Returns `Ok(())` if they are equal or
-    /// `Err(HCIPackError::BadLength)` not equal.
-    #[inline]
-    pub fn expect_length(expected: usize, buf: &[u8]) -> Result<(), HCIPackError> {
-        if buf.len() != expected {
-            Err(HCIPackError::BadLength {
-                expected,
-                got: buf.len(),
-            })
-        } else {
-            Ok(())
-        }
-    }
-
-    #[inline]
-    pub fn bad_index(index: usize) -> HCIPackError {
-        HCIPackError::BadBytes { index: Some(index) }
-    }
-}
-impl error::Error for HCIPackError {}

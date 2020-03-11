@@ -21,6 +21,8 @@ pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;
 #[macro_use]
 extern crate std;
 
+use std::convert::{TryFrom, TryInto};
+
 pub mod adapter;
 pub mod advertisement;
 pub mod advertiser;
@@ -30,16 +32,129 @@ pub mod error;
 pub mod hci;
 pub mod manager;
 pub mod uri;
-/// Stores Received Signal Strength Indicated as milli-dBm.
+
+/// Basic `ConversionError` for when primitives can't be converted to/from bytes because of invalid
+/// states. Most modules use their own errors for when there is more information to report.
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct ConversionError(());
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub enum PackError {
+    BadOpcode,
+    BadLength { expected: usize, got: usize },
+    BadBytes { index: Option<usize> },
+    InvalidFields,
+}
+impl PackError {
+    /// Ensure `buf.len() == expected`. Returns `Ok(())` if they are equal or
+    /// `Err(HCIPackError::BadLength)` not equal.
+    #[inline]
+    pub fn expect_length(expected: usize, buf: &[u8]) -> Result<(), PackError> {
+        if buf.len() != expected {
+            Err(PackError::BadLength {
+                expected,
+                got: buf.len(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    #[inline]
+    pub fn bad_index(index: usize) -> PackError {
+        PackError::BadBytes { index: Some(index) }
+    }
+}
+impl error::Error for PackError {}
+
+/// Received Signal Strength Indicator (RSSI). Units: `dBm`. Range -127 dBm to +20 dBm. Defaults to
+/// 0 dBm.
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Default)]
+pub struct RSSI(i8);
+impl RSSI {
+    pub const MIN_RSSI_I8: i8 = -127;
+    pub const MAX_RSSI_I8: i8 = 20;
+    pub const MAX_RSSI: RSSI = RSSI(Self::MAX_RSSI_I8);
+    pub const MIN_RSSI: RSSI = RSSI(Self::MIN_RSSI_I8);
+    /// Creates a new RSSI from `dbm`.
+    /// # Panics
+    /// Panics if `dbm < MIN_RSSI || dbm > MAX_RSSI`.
+    pub fn new(dbm: i8) -> RSSI {
+        assert!(
+            dbm >= Self::MIN_RSSI_I8 && dbm <= Self::MAX_RSSI_I8,
+            "invalid rssi '{}'",
+            dbm
+        );
+        RSSI(dbm)
+    }
+    pub fn maybe_rssi(val: i8) -> Result<Option<RSSI>, ConversionError> {
+        match val {
+            -127..=20 => Ok(Some(RSSI(val))),
+            127 => Ok(None),
+            _ => Err(ConversionError(())),
+        }
+    }
+}
+impl From<RSSI> for i8 {
+    fn from(rssi: RSSI) -> Self {
+        rssi.0
+    }
+}
+
+impl From<RSSI> for u8 {
+    fn from(rssi: RSSI) -> Self {
+        rssi.0 as u8
+    }
+}
+impl TryFrom<i8> for RSSI {
+    type Error = ConversionError;
+
+    fn try_from(value: i8) -> Result<Self, Self::Error> {
+        if value > Self::MAX_RSSI_I8 || value < Self::MIN_RSSI_I8 {
+            Err(ConversionError(()))
+        } else {
+            Ok(RSSI(value))
+        }
+    }
+}
+impl TryFrom<u8> for RSSI {
+    type Error = ConversionError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        (value as i8).try_into()
+    }
+}
+/// Stores milli-dBm.
 /// So -100 dBm is = `RSSI(-100_000)`
 /// 0 dBm = `RSSI(0)`
 /// 10.05 dBm = `RSSI(10_050)`
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct RSSI(pub i32);
-impl RSSI {
-    pub fn new(milli_dbm: i32) -> RSSI {
-        RSSI(milli_dbm)
+pub struct MilliDBM(pub i32);
+impl MilliDBM {
+    pub fn new(milli_dbm: i32) -> MilliDBM {
+        MilliDBM(milli_dbm)
     }
 }
+pub const BT_ADDRESS_LEN: usize = 6;
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct BTAddress();
+pub struct BTAddress(pub [u8; BT_ADDRESS_LEN]);
+impl BTAddress {
+    pub const LEN: usize = BT_ADDRESS_LEN;
+    pub const ZEROED: BTAddress = BTAddress([0_u8; 6]);
+    /// Creates a new 'BTAddress' from a byte slice.
+    /// # Panics
+    /// Panics if `bytes.len() != BT_ADDRESS_LEN` (6 bytes).
+    pub fn new(bytes: &[u8]) -> BTAddress {
+        assert_eq!(bytes.len(), BT_ADDRESS_LEN, "address wrong length");
+        BTAddress(bytes.try_into().expect("length checked by assert_eq above"))
+    }
+    pub fn unpack_from(bytes: &[u8]) -> Result<Self, PackError> {
+        PackError::expect_length(BT_ADDRESS_LEN, bytes)?;
+        Ok(Self::new(bytes))
+    }
+    pub fn pack_into(&self, bytes: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(BT_ADDRESS_LEN, bytes)?;
+        bytes.copy_from_slice(&self.0[..]);
+        Ok(())
+    }
+}

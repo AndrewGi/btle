@@ -2,10 +2,12 @@ pub mod advertise;
 pub mod mask;
 /// Reexports of all the HCI LE message types.
 pub mod messages;
+pub mod report;
 pub use messages::commands::*;
 pub mod random;
 pub mod scan;
-use crate::hci::{HCIConversionError, Opcode, OCF, OGF};
+use crate::hci::{Opcode, OCF, OGF};
+use crate::{ConversionError, PackError};
 use core::convert::TryFrom;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -43,7 +45,7 @@ pub enum LEControllerOpcode {
     TestEnd = 0x001F,
 }
 impl TryFrom<OCF> for LEControllerOpcode {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(ocf: OCF) -> Result<Self, Self::Error> {
         match u16::from(ocf) {
@@ -77,7 +79,7 @@ impl TryFrom<OCF> for LEControllerOpcode {
             0x001D => Ok(LEControllerOpcode::ReceiverTest),
             0x001E => Ok(LEControllerOpcode::TransmitterTest),
             0x001F => Ok(LEControllerOpcode::TestEnd),
-            _ => Err(HCIConversionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }
@@ -143,7 +145,7 @@ impl From<MetaEventCode> for u8 {
     }
 }
 impl TryFrom<u8> for MetaEventCode {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -181,12 +183,16 @@ impl TryFrom<u8> for MetaEventCode {
             0x20 => Ok(MetaEventCode::PathLossThreshold),
             0x21 => Ok(MetaEventCode::TransmitPowerReporting),
             0x22 => Ok(MetaEventCode::BIGInfoAdvertisingReport),
-            _ => Err(HCIConversionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }
 pub trait MetaEvent {
     const CODE: MetaEventCode;
+    fn byte_len(&self) -> usize;
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    where
+        Self: Sized;
 }
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum OwnAddressType {
@@ -202,7 +208,7 @@ impl From<OwnAddressType> for u8 {
     }
 }
 impl TryFrom<u8> for OwnAddressType {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -210,7 +216,7 @@ impl TryFrom<u8> for OwnAddressType {
             1 => Ok(OwnAddressType::Random),
             2 => Ok(OwnAddressType::PrivateOrPublic),
             3 => Ok(OwnAddressType::PrivateOrRandom),
-            _ => Err(HCIConversionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }

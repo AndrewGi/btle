@@ -2,7 +2,8 @@ use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
 use crate::hci::le::{LEControllerOpcode, OwnAddressType};
-use crate::hci::{HCIConversionError, HCIPackError, Opcode};
+use crate::hci::Opcode;
+use crate::{ConversionError, PackError};
 use std::convert::TryFrom;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -24,27 +25,27 @@ impl Command for SetScanEnable {
         Self::BYTE_LEN
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        HCIPackError::expect_length(Self::BYTE_LEN, buf)?;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(Self::BYTE_LEN, buf)?;
         buf[0] = self.is_enabled.into();
         buf[1] = self.filter_duplicates.into();
         Ok(())
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {
-        HCIPackError::expect_length(Self::BYTE_LEN, buf)?;
+        PackError::expect_length(Self::BYTE_LEN, buf)?;
         let is_enabled = match buf[0] {
             0 => false,
             1 => true,
-            _ => return Err(HCIPackError::bad_index(0)),
+            _ => return Err(PackError::bad_index(0)),
         };
         let filter_duplicates = match buf[1] {
             0 => false,
             1 => true,
-            _ => return Err(HCIPackError::bad_index(1)),
+            _ => return Err(PackError::bad_index(1)),
         };
         Ok(Self {
             is_enabled,
@@ -66,7 +67,7 @@ impl From<ScanningFilterPolicy> for u8 {
     }
 }
 impl TryFrom<u8> for ScanningFilterPolicy {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -74,7 +75,7 @@ impl TryFrom<u8> for ScanningFilterPolicy {
             1 => Ok(ScanningFilterPolicy::Whitelisted),
             2 => Ok(ScanningFilterPolicy::DirectedAll),
             3 => Ok(ScanningFilterPolicy::DirectedWhitelisted),
-            _ => Err(HCIConversionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }
@@ -146,13 +147,13 @@ impl From<ScanType> for u8 {
     }
 }
 impl TryFrom<u8> for ScanType {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(ScanType::Passive),
             1 => Ok(ScanType::Active),
-            _ => Err(HCIConversionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }
@@ -190,11 +191,11 @@ impl Command for SetScanParameters {
         SET_SCAN_PARAMETERS_LEN
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        HCIPackError::expect_length(SET_SCAN_PARAMETERS_LEN, buf)?;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(SET_SCAN_PARAMETERS_LEN, buf)?;
         if self.scan_window.0 > self.scan_interval.0 {
             // The scan window should always be less than or equal to the scan interval.
-            return Err(HCIPackError::InvalidFields);
+            return Err(PackError::InvalidFields);
         }
         buf[0] = self.scan_type.into();
         buf[1..3].copy_from_slice(&self.scan_interval.0.to_bytes_le()[..]);
@@ -204,7 +205,7 @@ impl Command for SetScanParameters {
         Ok(())
     }
 
-    fn unpack_from(_buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(_buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {

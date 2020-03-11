@@ -1,6 +1,7 @@
 use crate::bytes::Storage;
 use crate::hci::packet::{PacketType, RawPacket};
-use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
+use crate::hci::{ErrorCode, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
+use crate::{ConversionError, PackError};
 use core::convert::TryFrom;
 use std::fmt::Formatter;
 
@@ -83,7 +84,7 @@ impl From<EventCode> for u32 {
     }
 }
 impl TryFrom<u8> for EventCode {
-    type Error = HCIConversionError;
+    type Error = ConversionError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -151,7 +152,7 @@ impl TryFrom<u8> for EventCode {
             0x4A => Ok(EventCode::AMPTestEnd),
             0x4B => Ok(EventCode::AMPReceiverReport),
             0x3E => Ok(EventCode::LEMeta),
-            _ => Err(HCIConversionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }
@@ -163,22 +164,22 @@ pub trait Event {
         self.byte_len() + EVENT_CODE_LEN + 1
     }
     /// Unpack the `Event` from a byte buffer.
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized;
-    fn unpack_event_packet<S: AsRef<[u8]>>(packet: &EventPacket<S>) -> Result<Self, HCIPackError>
+    fn unpack_event_packet<S: AsRef<[u8]>>(packet: &EventPacket<S>) -> Result<Self, PackError>
     where
         Self: Sized,
     {
         if packet.event_code != Self::CODE {
-            Err(HCIPackError::BadOpcode)
+            Err(PackError::BadOpcode)
         } else {
             Self::unpack_from(packet.parameters())
         }
     }
     /// Pack the `Event` parameters into a byte buffer.
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
-    fn pack_event_packet<S: Storage>(&self) -> Result<EventPacket<S>, HCIPackError> {
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
+    fn pack_event_packet<S: Storage<u8>>(&self) -> Result<EventPacket<S>, PackError> {
         let mut out = S::with_size(self.full_len());
         self.pack_into(out.as_mut())?;
         Ok(EventPacket {
@@ -210,26 +211,24 @@ impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
     }
 }
 impl<'a> TryFrom<RawPacket<&'a [u8]>> for EventPacket<&'a [u8]> {
-    type Error = HCIPackError;
+    type Error = PackError;
 
     fn try_from(packet: RawPacket<&'a [u8]>) -> Result<Self, Self::Error> {
         if packet.packet_type != PacketType::Event {
-            Err(HCIPackError::BadOpcode)
+            Err(PackError::BadOpcode)
         } else {
             let code = match packet.buf.get(0) {
                 None => {
-                    return Err(HCIPackError::BadLength {
+                    return Err(PackError::BadLength {
                         expected: 2,
                         got: 0,
                     })
                 }
-                Some(&b) => EventCode::try_from(b)
-                    .ok()
-                    .ok_or(HCIPackError::bad_index(0))?,
+                Some(&b) => EventCode::try_from(b).ok().ok_or(PackError::bad_index(0))?,
             };
             let len = match packet.buf.get(1) {
                 None => {
-                    return Err(HCIPackError::BadLength {
+                    return Err(PackError::BadLength {
                         expected: 2,
                         got: 1,
                     })
@@ -238,7 +237,7 @@ impl<'a> TryFrom<RawPacket<&'a [u8]>> for EventPacket<&'a [u8]> {
             };
             if usize::from(len) != (packet.buf.len() - 2) {
                 // Packet length is incorrect
-                Err(HCIPackError::InvalidFields)
+                Err(PackError::InvalidFields)
             } else {
                 Ok(EventPacket::new(code, &packet.buf[2..]))
             }
@@ -255,8 +254,8 @@ impl<Storage: AsRef<[u8]>> core::fmt::Debug for EventPacket<Storage> {
 }
 pub trait ReturnParameters {
     fn byte_len(&self) -> usize;
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError>;
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized;
 }
@@ -268,19 +267,19 @@ impl ReturnParameters for StatusReturn {
         1
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        HCIPackError::expect_length(1, buf)?;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(1, buf)?;
         buf[0] = self.status.into();
         Ok(())
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {
-        HCIPackError::expect_length(1, buf)?;
+        PackError::expect_length(1, buf)?;
         Ok(StatusReturn {
-            status: ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::bad_index(0))?,
+            status: ErrorCode::try_from(buf[0]).map_err(|_| PackError::bad_index(0))?,
         })
     }
 }
@@ -299,20 +298,12 @@ impl<Params: ReturnParameters> Event for CommandComplete<Params> {
         COMMAND_COMPLETE_HEADER_LEN + self.params.byte_len()
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        HCIPackError::expect_length(self.byte_len(), buf)?;
-        self.params.pack_into(&mut buf[3..])?;
-        self.opcode.pack(&mut buf[1..3])?;
-        buf[0] = self.num_command_packets;
-        Ok(())
-    }
-
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {
         if buf.len() < COMMAND_COMPLETE_HEADER_LEN {
-            Err(HCIPackError::BadLength {
+            Err(PackError::BadLength {
                 expected: COMMAND_COMPLETE_HEADER_LEN,
                 got: buf.len(),
             })
@@ -324,6 +315,14 @@ impl<Params: ReturnParameters> Event for CommandComplete<Params> {
                 params: Params::unpack_from(&buf[3..])?,
             })
         }
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(self.byte_len(), buf)?;
+        self.params.pack_into(&mut buf[3..])?;
+        self.opcode.pack(&mut buf[1..3])?;
+        buf[0] = self.num_command_packets;
+        Ok(())
     }
 }
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -340,22 +339,22 @@ impl Event for CommandStatus {
         COMMAND_STATUS_LEN
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        HCIPackError::expect_length(COMMAND_STATUS_LEN, buf)?;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(COMMAND_STATUS_LEN, buf)?;
         self.opcode.pack(&mut buf[2..4])?;
         buf[0] = self.status.into();
         buf[1] = self.num_command_packets;
         Ok(())
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {
-        HCIPackError::expect_length(COMMAND_STATUS_LEN, buf)?;
+        PackError::expect_length(COMMAND_STATUS_LEN, buf)?;
         let opcode = Opcode::unpack(&buf[2..4])?;
         let status =
-            ErrorCode::try_from(buf[0]).map_err(|_| HCIPackError::BadBytes { index: Some(0) })?;
+            ErrorCode::try_from(buf[0]).map_err(|_| PackError::BadBytes { index: Some(0) })?;
         Ok(CommandStatus {
             status,
             num_command_packets: buf[1],

@@ -1,9 +1,9 @@
 use crate::bytes::Storage;
-use crate::error;
 use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
 use crate::hci::packet::{PacketType, RawPacket};
-use crate::hci::{HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
+use crate::hci::{Opcode, FULL_COMMAND_MAX_LEN};
+use crate::{error, PackError};
 use core::convert::{TryFrom, TryInto};
 use core::future::Future;
 use core::pin::Pin;
@@ -11,7 +11,7 @@ use core::task::{Context, Poll};
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
 pub enum Error {
-    CommandError(HCIPackError),
+    CommandError(PackError),
     UnsupportedPacketType(u8),
     BadOpcode,
     BadEventCode,
@@ -20,8 +20,8 @@ pub enum Error {
     StreamFailed,
     IOError,
 }
-impl From<HCIPackError> for Error {
-    fn from(e: HCIPackError) -> Self {
+impl From<PackError> for Error {
+    fn from(e: PackError) -> Self {
         Error::CommandError(e)
     }
 }
@@ -285,11 +285,11 @@ impl<T: futures_io::AsyncWrite> HCIWriter for T {
 pub trait HCIStreamable: HCIWriter + HCIReader + HCIFilterable {}
 impl<T: HCIWriter + HCIReader + HCIFilterable> HCIStreamable for T {}
 
-pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> {
+pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>> {
     stream: &'a mut Stream<S>,
     buf: Buf,
 }
-impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> futures_core::stream::Stream
+impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>> futures_core::stream::Stream
     for PacketStream<'a, S, Buf>
 {
     type Item = Result<RawPacket<Buf>, Error>;

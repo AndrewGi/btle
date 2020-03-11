@@ -1,7 +1,8 @@
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
 use crate::hci::le::LEControllerOpcode;
-use crate::hci::{HCIPackError, Opcode};
+use crate::hci::Opcode;
+use crate::PackError;
 use std::convert::TryInto;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -20,21 +21,21 @@ impl Command for SetAdvertisingEnable {
         SET_ADVERTISING_ENABLE_LEN
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        HCIPackError::expect_length(SET_ADVERTISING_ENABLE_LEN, buf)?;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(SET_ADVERTISING_ENABLE_LEN, buf)?;
         buf[0] = self.is_enabled.into();
         Ok(())
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {
-        HCIPackError::expect_length(SET_ADVERTISING_ENABLE_LEN, buf)?;
+        PackError::expect_length(SET_ADVERTISING_ENABLE_LEN, buf)?;
         match buf[0] {
             0 => Ok(Self { is_enabled: false }),
             1 => Ok(Self { is_enabled: true }),
-            _ => Err(HCIPackError::bad_index(0)),
+            _ => Err(PackError::bad_index(0)),
         }
     }
 }
@@ -56,15 +57,15 @@ impl Command for SetAdvertisingData {
         usize::from(self.len) + 1
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), HCIPackError> {
-        HCIPackError::expect_length(self.byte_len(), buf)?;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(self.byte_len(), buf)?;
         buf[0] = self.len;
         let l = usize::from(self.len);
         buf[1..][..l].copy_from_slice(&self.data[..l]);
         Ok(())
     }
 
-    fn unpack_from(_buf: &[u8]) -> Result<Self, HCIPackError>
+    fn unpack_from(_buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {
