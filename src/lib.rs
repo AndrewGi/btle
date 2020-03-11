@@ -14,6 +14,8 @@
 )]
 #![allow(dead_code)]
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
 /// Workaround for returning futures from async Traits.
 pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;

@@ -3,7 +3,7 @@ use crate::hci::event::StatusReturn;
 use crate::hci::le::LEControllerOpcode;
 use crate::hci::Opcode;
 use crate::PackError;
-use std::convert::TryInto;
+use core::convert::TryInto;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetAdvertisingEnable {

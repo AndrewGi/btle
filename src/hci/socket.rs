@@ -140,6 +140,7 @@ pub enum HCISocketError {
     IO(std::io::Error),
     Other(i32),
 }
+impl crate::error::Error for HCISocketError {}
 impl HCISocket {
     /// Creates an `HCISocket` based on a `libc` file_descriptor (`i32`). Returns an error if could
     /// not bind to the `adapter_id`.

@@ -1,7 +1,7 @@
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::ops;
-use std::ops::RangeFull;
-
 #[derive(Copy, Clone)]
 pub enum Endian {
     Big,
@@ -252,14 +252,14 @@ impl<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> ops::Index<ops
 {
     type Output = [T];
 
-    fn index(&self, _index: RangeFull) -> &Self::Output {
+    fn index(&self, _index: ops::RangeFull) -> &Self::Output {
         self.as_ref()
     }
 }
 impl<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> ops::IndexMut<ops::RangeFull>
     for StaticBuf<T, ArrayBuf>
 {
-    fn index_mut(&mut self, _index: RangeFull) -> &mut Self::Output {
+    fn index_mut(&mut self, _index: ops::RangeFull) -> &mut Self::Output {
         self.as_mut()
     }
 }

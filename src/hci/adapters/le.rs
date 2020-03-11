@@ -82,6 +82,15 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
         AdvertisementStream::new(self)
     }
 }
+/// BLE Advertisement Stream. Returns advertising reports [`ReportInfo'] that contain
+/// advertisement type [`EventType`], address type [`AddressType`], bluetooth address [`BTAddress`],
+/// data (0-31 bytes) and maybe (`Option`) RSSI [`RSSI`].
+///
+/// [`ReportInfo`]: btle::hci::le::report::ReportInfo;
+/// [`EventType`]: btle::hci::le::report::EventType;
+/// [`AddressType`]: btle::hci::le::report::AddressType;
+/// [`BTAddress`]: btle::BTAddress;
+/// [`RSSI`]: btle::RSSI;
 pub struct AdvertisementStream<
     'a,
     'b: 'a,

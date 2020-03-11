@@ -1,8 +1,8 @@
 use crate::advertisement::{IncomingAdvertisement, OutgoingAdvertisement};
 use crate::BoxFuture;
+use core::fmt::Formatter;
 use futures_core::Stream;
 use futures_sink::Sink;
-use std::fmt::Formatter;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum AdvertiserError {}

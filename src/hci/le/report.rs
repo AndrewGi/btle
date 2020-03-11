@@ -93,11 +93,23 @@ impl From<AddressType> for u8 {
         a as u8
     }
 }
+/// BLE Advertising report from scanning for advertisements that contains advertisement type [`EventType`],
+/// address type [`AddressType`], bluetooth address [`BTAddress`], data (0-31 bytes) and
+/// maybe (`Option`) RSSI [`RSSI`].
+///
+/// # Important
+/// `T` is the byte buffer that stores the advertisement data (0-31 bytes) which means `T` should
+/// always be able to hold 31 bytes if you are using `unpack_from`.
 pub struct ReportInfo<T: AsRef<[u8]> = StaticAdvBuffer> {
+    /// Advertisement Type.
     pub event_type: EventType,
+    /// Bluetooth Address type.
     pub address_type: AddressType,
+    /// Bluetooth Address associated with the Advertisement.
     pub address: BTAddress,
+    /// Advertisement data (0-31 bytes).
     pub data: T,
+    /// RSSI (-127dBm to +20dBm) or `None` if RSSI readings are unsupported by the adapter.
     pub rssi: Option<RSSI>,
 }
 impl<T: AsRef<[u8]>> core::fmt::Debug for ReportInfo<T> {

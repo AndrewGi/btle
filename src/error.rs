@@ -1,11 +1,9 @@
-/// Generic Error Trait. Similar to `std::error::Error`.
-use core::fmt::Debug;
-use std::fmt::Formatter;
+//! Generic Error Trait. Similar to `std::error::Error`.
 
 /// Generic Error type. Similar to `std::error::Error` but supports `no_std`. If the `std` feature
 /// is enabled, `Error` will implement `std::error::Error`. Automatically implements `fmt::Display`
 /// by using the `Debug` implementation (`"{:?}"`).
-pub trait Error: Debug {
+pub trait Error: core::fmt::Debug {
     /// The lower-level source of this error, if any.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
@@ -19,12 +17,12 @@ impl<E: Error> From<E> for STDError<E> {
     }
 }
 impl<E: Error> core::fmt::Debug for STDError<E> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         write!(f, "{:?}", self.0)
     }
 }
 impl<T: Error> core::fmt::Display for STDError<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         write!(f, "{:?}", self.0)
     }
 }
