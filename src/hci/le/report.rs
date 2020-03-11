@@ -93,7 +93,7 @@ impl From<AddressType> for u8 {
         a as u8
     }
 }
-pub struct ReportInfo<T: AsRef<[u8]>> {
+pub struct ReportInfo<T: AsRef<[u8]> = StaticAdvBuffer> {
     pub event_type: EventType,
     pub address_type: AddressType,
     pub address: BTAddress,
