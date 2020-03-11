@@ -200,7 +200,6 @@ impl<S: HCIReader> Stream<S> {
         for _try_i in 0..HCI_EVENT_READ_TRIES {
             // Reuse `buf` to read the RawPacket
             let event = EventPacket::try_from(self.as_mut().read_packet(&mut buf[..]).await?)?;
-            println!("event: {:?}", event);
             if event.event_code() == CommandComplete::<Cmd::Return>::CODE {
                 if Opcode::unpack(&event.parameters().as_ref()[1..3])? == Cmd::opcode() {
                     self.stream_pinned().set_filter(&old_filter)?;

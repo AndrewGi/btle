@@ -30,9 +30,16 @@ pub fn dump_not_supported() -> Result<(), Box<dyn std::error::Error>> {
 pub fn dump_bluez(adapter_id: u16) -> Result<(), Box<dyn std::error::Error>> {
     use btle::error::STDError;
     let manager = btle::hci::socket::Manager::new().map_err(STDError)?;
-    let socket = manager
-        .get_adapter_socket(btle::hci::socket::AdapterID(adapter_id))
-        .map_err(STDError)?;
+    let socket = match manager.get_adapter_socket(btle::hci::socket::AdapterID(adapter_id)) {
+        Ok(socket) => socket,
+        Err(btle::hci::socket::HCISocketError::PermissionDenied) => {
+            eprintln!("Permission denied error when opening the HCI socket. Maybe run as sudo?");
+            return Err(btle::hci::socket::HCISocketError::PermissionDenied)
+                .map_err(STDError)
+                .map_err(Into::into);
+        }
+        Err(e) => return Err(STDError(e).into()),
+    };
     let mut runtime = tokio::runtime::Builder::new()
         .enable_all()
         .build()
@@ -50,14 +57,15 @@ pub fn dump_bluez(adapter_id: u16) -> Result<(), Box<dyn std::error::Error>> {
 pub async fn dump_adapter<S: btle::hci::stream::HCIStreamable>(
     mut adapter: btle::hci::adapters::Adapter<S>,
 ) -> Result<(), btle::hci::adapters::Error> {
-    let mut adapter = unsafe { Pin::new_unchecked(&mut adapter) };
-    //adapter.as_mut().le().set_scan_enabled(false, false).await?;
+    let mut adapter = Pin::new(&mut adapter);
     let mut le = adapter.as_mut().le();
+    // Set BLE Scan parameters (when to scan, how long, etc)
     le.set_scan_parameters(le::SetScanParameters::DEFAULT)
         .await?;
-
+    // Enable scanning for advertisement packets.
     le.set_scan_enabled(true, false).await?;
 
+    // Set the HCI filter to only allow LEMeta events.
     let mut filter = btle::hci::stream::Filter::default();
     filter.enable_type(PacketType::Event);
     filter.enable_event(EventCode::LEMeta);
@@ -65,9 +73,12 @@ pub async fn dump_adapter<S: btle::hci::stream::HCIStreamable>(
         .stream_pinned()
         .stream_pinned()
         .set_filter(&filter)?;
+    // Create the advertisement stream from the LEAdapter.
     let mut stream: AdvertisementStream<S, Box<[ReportInfo]>> = le.advertisement_stream();
+    // Pin it.
     let mut stream = Pin::new(&mut stream);
     loop {
+        // Asynchronously iterate through the stream and print each advertisement report.
         while let Some(report) = StreamExt::next(&mut stream).await {
             println!("report: {:?}", &report);
         }
