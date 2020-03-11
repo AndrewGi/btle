@@ -6,6 +6,7 @@ pub mod report;
 pub use messages::commands::*;
 pub mod random;
 pub mod scan;
+use crate::hci::event::{Event, EventCode};
 use crate::hci::{Opcode, OCF, OGF};
 use crate::{ConversionError, PackError};
 use core::convert::TryFrom;
@@ -188,11 +189,42 @@ impl TryFrom<u8> for MetaEventCode {
     }
 }
 pub trait MetaEvent {
-    const CODE: MetaEventCode;
+    const META_CODE: MetaEventCode;
     fn byte_len(&self) -> usize;
     fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
+}
+impl<M: MetaEvent> Event for M {
+    const CODE: EventCode = EventCode::LEMeta;
+
+    fn byte_len(&self) -> usize {
+        MetaEvent::byte_len(self) + 1
+    }
+
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    where
+        Self: Sized,
+    {
+        if u8::from(Self::CODE)
+            == *buf.get(0).ok_or(PackError::BadLength {
+                expected: 1,
+                got: 0,
+            })?
+        {
+            MetaEvent::unpack_from(&buf[1..])
+        } else {
+            Err(PackError::bad_index(0))
+        }
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(self.byte_len() + 1, buf)?;
+        <Self as MetaEvent>::pack_into(self, &mut buf[1..])?;
+        buf[0] = Self::META_CODE.into();
+        Ok(())
+    }
 }
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum OwnAddressType {

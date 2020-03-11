@@ -280,8 +280,9 @@ impl<T: Copy + Default, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> ops:
         &mut self.as_mut()[index]
     }
 }
-/// Objects that store and own bytes (`Box<[T]>`, `Vec<T>`, `StaticBuf<[T; 32]>`, etc).
-/// This allows for generic byte storage types for byte buffers.
+/// Objects that store and own `T`s (`Box<[T]>`, `Vec<T>`, `StaticBuf<[T; 32]>`, etc).
+/// This allows for generic byte storage types for byte buffers. This also enable generic storage
+/// for any `T` type but the `Copy + Default` requirement might be too restricting for all cases.
 pub trait Storage<T: Copy + Default>: AsRef<[T]> + AsMut<[T]> + Unpin {
     fn with_size(size: usize) -> Self
     where
@@ -305,6 +306,12 @@ impl<T: Copy + Unpin + Default> Storage<T> for Vec<T> {
     {
         vec![T::default(); size]
     }
+    fn from_slice(buf: &[T]) -> Self
+    where
+        Self: Sized,
+    {
+        Vec::from(buf)
+    }
     fn len(&self) -> usize {
         <Vec<T>>::len(self)
     }
@@ -315,6 +322,12 @@ impl<T: Copy + Unpin + Default> Storage<T> for Box<[T]> {
         Self: Sized,
     {
         Vec::with_size(size).into_boxed_slice()
+    }
+    fn from_slice(buf: &[T]) -> Self
+    where
+        Self: Sized,
+    {
+        buf.into()
     }
 }
 

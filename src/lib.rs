@@ -21,8 +21,7 @@ pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;
 #[macro_use]
 extern crate std;
 
-use std::convert::{TryFrom, TryInto};
-
+use core::convert::{TryFrom, TryInto};
 pub mod adapter;
 pub mod advertisement;
 pub mod advertiser;
@@ -37,7 +36,6 @@ pub mod uri;
 /// states. Most modules use their own errors for when there is more information to report.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct ConversionError(());
-
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum PackError {
     BadOpcode,
@@ -87,6 +85,7 @@ impl RSSI {
         );
         RSSI(dbm)
     }
+    pub const UNSUPPORTED_RSSI: i8 = 127;
     pub fn maybe_rssi(val: i8) -> Result<Option<RSSI>, ConversionError> {
         match val {
             -127..=20 => Ok(Some(RSSI(val))),

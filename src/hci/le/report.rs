@@ -1,5 +1,5 @@
 use crate::advertisement::MAX_ADV_LEN;
-use crate::bytes::Storage;
+use crate::bytes::{StaticBuf, Storage};
 use crate::hci::le::{MetaEvent, MetaEventCode};
 use crate::{BTAddress, ConversionError, PackError, BT_ADDRESS_LEN, RSSI};
 use std::convert::TryFrom;
@@ -16,6 +16,11 @@ impl NumReports {
         }
     }
 }
+impl From<NumReports> for u8 {
+    fn from(n: NumReports) -> Self {
+        n.0
+    }
+}
 impl TryFrom<u8> for NumReports {
     type Error = ConversionError;
 
@@ -24,6 +29,16 @@ impl TryFrom<u8> for NumReports {
             Ok(NumReports(value))
         } else {
             Err(ConversionError(()))
+        }
+    }
+}
+impl TryFrom<usize> for NumReports {
+    type Error = ConversionError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match u8::try_from(value).map(NumReports::try_from) {
+            Ok(Ok(v)) => Ok(v),
+            _ => Err(ConversionError(())),
         }
     }
 }
@@ -114,7 +129,8 @@ impl<T: AsRef<[u8]>> ReportInfo<T> {
         1 + 1 + BT_ADDRESS_LEN + self.data.as_ref().len() + 1
     }
 }
-pub struct AdvertisingReport<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]>> {
+pub type StaticAdvBuffer = StaticBuf<u8, [u8; MAX_ADV_LEN]>;
+pub struct AdvertisingReport<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]> = StaticAdvBuffer> {
     pub reports: T,
     pub _marker: core::marker::PhantomData<B>,
 }
@@ -138,7 +154,7 @@ impl<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]>> AdvertisingReport<T, B> {
 impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
     for AdvertisingReport<T, B>
 {
-    const CODE: MetaEventCode = Self::SUBEVENT_CODE;
+    const META_CODE: MetaEventCode = Self::SUBEVENT_CODE;
 
     fn byte_len(&self) -> usize {
         AdvertisingReport::byte_len(self)
@@ -158,11 +174,14 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
         let mut total_data_len = 0usize;
         for i in 0..reports_len {
             let event_type_index = i + 1;
+            let address_type_index = event_type_index + reports_len;
+            let address_index = address_type_index + reports_len;
+            let data_len_index = address_index + BT_ADDRESS_LEN * reports_len;
+            let data_index = data_len_index + total_data_len;
             let event_type = match buf.get(event_type_index).map(|e| EventType::try_from(*e)) {
                 Some(Ok(t)) => t,
                 _ => return Err(PackError::bad_index(event_type_index)),
             };
-            let address_type_index = event_type_index + reports_len;
             let address_type = match buf
                 .get(address_type_index)
                 .map(|e| AddressType::try_from(*e))
@@ -171,19 +190,16 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
                 _ => return Err(PackError::bad_index(address_type_index)),
             };
 
-            let address_index = address_type_index + reports_len;
             let address =
                 BTAddress::unpack_from(&buf[address_index..address_index + BT_ADDRESS_LEN])?;
-            let data_len_index = address_index + BT_ADDRESS_LEN * reports_len;
             let data_len = buf
                 .get(data_len_index)
                 .map(|e| *e)
                 .ok_or(PackError::bad_index(data_len_index))?;
+            let data_index_end = data_index + usize::from(data_len);
             if usize::from(data_len) > MAX_ADV_LEN {
                 return Err(PackError::bad_index(data_len_index));
             }
-            let data_index = data_len_index + total_data_len;
-            let data_index_end = data_index + usize::from(data_len);
             PackError::expect_length(data_index_end, buf)?;
             let data = &buf[data_index..data_index_end];
             out.reports.as_mut()[i] = ReportInfo {
@@ -204,5 +220,45 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
                 }
         }
         Ok(out)
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        let reports = self.reports.as_ref();
+        let reports_len = reports.len();
+        let num_reports =
+            NumReports::try_from(reports_len).map_err(|_| PackError::InvalidFields)?;
+        let full = self.byte_len();
+        PackError::expect_length(full, buf)?;
+        let mut total_data_len = 0usize;
+        for i in 0..reports_len {
+            let report = &reports[i];
+            let data = report.data.as_ref();
+            let data_len = data.len();
+            if data_len > MAX_ADV_LEN {
+                return Err(PackError::InvalidFields);
+            }
+            let event_type_index = i + 1;
+            let address_type_index = event_type_index + reports_len;
+            let address_index = address_type_index + reports_len;
+            let data_len_index = address_index + BT_ADDRESS_LEN * reports_len;
+            let data_index = data_len_index + total_data_len;
+            let data_index_end = data_index + usize::from(data_len);
+            buf[event_type_index] = report.event_type.into();
+            buf[address_type_index] = report.address_type.into();
+            report
+                .address
+                .pack_into(&mut buf[address_type_index..address_type_index + BT_ADDRESS_LEN])?;
+            buf[data_index..data_index_end].copy_from_slice(data);
+            total_data_len += data_len;
+        }
+        for i in 0..reports_len {
+            let rssi_index = total_data_len + i;
+            buf[rssi_index] = reports[i]
+                .rssi
+                .map(i8::from)
+                .unwrap_or(RSSI::UNSUPPORTED_RSSI) as u8;
+        }
+        buf[0] = num_reports.into();
+        Ok(())
     }
 }
