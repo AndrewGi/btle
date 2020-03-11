@@ -2,7 +2,6 @@ use crate::bytes::Storage;
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{ErrorCode, HCIConversionError, HCIPackError, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
 use core::convert::TryFrom;
-use std::convert::TryInto;
 use std::fmt::Formatter;
 
 /// HCI Event Code. 8-bit code corresponding to an HCI Event. Check the Bluetooth Core Spec for more.
@@ -217,15 +216,31 @@ impl<'a> TryFrom<RawPacket<&'a [u8]>> for EventPacket<&'a [u8]> {
         if packet.packet_type != PacketType::Event {
             Err(HCIPackError::BadOpcode)
         } else {
-            match packet.buf.get(0) {
-                None => Err(HCIPackError::BadLength {
-                    expected: 1,
-                    got: 0,
-                }),
-                Some(&b) => Ok(EventPacket::new(
-                    b.try_into().ok().ok_or(HCIPackError::bad_index(0))?,
-                    &packet.buf[1..],
-                )),
+            let code = match packet.buf.get(0) {
+                None => {
+                    return Err(HCIPackError::BadLength {
+                        expected: 2,
+                        got: 0,
+                    })
+                }
+                Some(&b) => EventCode::try_from(b)
+                    .ok()
+                    .ok_or(HCIPackError::bad_index(0))?,
+            };
+            let len = match packet.buf.get(1) {
+                None => {
+                    return Err(HCIPackError::BadLength {
+                        expected: 2,
+                        got: 1,
+                    })
+                }
+                Some(l) => *l,
+            };
+            if usize::from(len) != (packet.buf.len() - 2) {
+                // Packet length is incorrect
+                Err(HCIPackError::InvalidFields)
+            } else {
+                Ok(EventPacket::new(code, &packet.buf[2..]))
             }
         }
     }

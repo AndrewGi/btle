@@ -1,9 +1,11 @@
+use crate::bytes::Storage;
 use crate::error;
 use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{HCIPackError, Opcode, FULL_COMMAND_MAX_LEN};
 use core::convert::{TryFrom, TryInto};
+use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 
@@ -168,10 +170,9 @@ impl<S: HCIReader> Stream<S> {
     {
         const BUF_LEN: usize = FULL_COMMAND_MAX_LEN;
         let mut buf = [0_u8; BUF_LEN];
-        let len = command.full_len();
         // Pack Command
-        command
-            .pack_full(&mut buf[..len])
+        let len = command
+            .packet_pack_into(&mut buf[..])
             .map_err(Error::CommandError)?;
         // New Filter
         let mut filter = Filter::default();
@@ -283,3 +284,20 @@ impl<T: futures_io::AsyncWrite> HCIWriter for T {
 /// Implements all the traits required to be a complete HCI Stream.
 pub trait HCIStreamable: HCIWriter + HCIReader + HCIFilterable {}
 impl<T: HCIWriter + HCIReader + HCIFilterable> HCIStreamable for T {}
+
+pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> {
+    stream: &'a mut Stream<S>,
+    buf: Buf,
+}
+impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> futures_core::stream::Stream
+    for PacketStream<'a, S, Buf>
+{
+    type Item = Result<RawPacket<Buf>, Error>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = &mut *self;
+        Pin::new(&mut this.stream.read_packet(this.buf.as_mut()))
+            .poll(cx)
+            .map(|r| Some(r.map(|p| p.clone_buf())))
+    }
+}

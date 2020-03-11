@@ -7,9 +7,7 @@ use crate::hci::stream::{HCIFilterable, HCIReader, HCIWriter, Stream};
 use crate::hci::{stream, ErrorCode};
 use crate::{error, hci};
 use core::fmt::Formatter;
-use core::future::Future;
 use core::pin::Pin;
-use futures_task::{Context, Poll};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum Error {
@@ -32,24 +30,24 @@ impl core::fmt::Display for Error {
     }
 }
 impl error::Error for Error {}
-pub struct Adapter<S: HCIWriter + HCIReader + HCIFilterable> {
-    pub stream: Stream<S>,
+pub struct Adapter<R: HCIWriter + HCIReader + HCIFilterable> {
+    pub stream: Stream<R>,
     _marker: (),
 }
-impl<S: HCIWriter + HCIReader + HCIFilterable> Adapter<S> {
-    pub fn new(stream: Stream<S>) -> Self {
+impl<R: HCIWriter + HCIReader + HCIFilterable> Adapter<R> {
+    pub fn new(stream: Stream<R>) -> Self {
         Self {
             stream,
             _marker: Default::default(),
         }
     }
-    pub fn into_stream(self) -> Stream<S> {
+    pub fn into_stream(self) -> Stream<R> {
         self.stream
     }
-    fn stream_pinned(self: Pin<&mut Self>) -> Pin<&mut Stream<S>> {
+    pub fn stream_pinned(self: Pin<&mut Self>) -> Pin<&mut Stream<R>> {
         unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().stream) }
     }
-    pub fn le(self: Pin<&mut Self>) -> le::LEAdapter<S> {
+    pub fn le(self: Pin<&mut Self>) -> le::LEAdapter<R> {
         le::LEAdapter::new(self)
     }
     pub async fn send_command<Cmd: Command>(
@@ -57,36 +55,29 @@ impl<S: HCIWriter + HCIReader + HCIFilterable> Adapter<S> {
         command: Cmd,
     ) -> Result<CommandComplete<Cmd::Return>, Error> {
         self.stream_pinned()
-            .send_command::<Cmd>(command)
+            .send_command(command)
             .await
             .map_err(Error::StreamError)
     }
+    /// Read a
+    pub async fn read_packet<S: Storage>(self: Pin<&mut Self>) -> Result<RawPacket<S>, Error> {
+        const PACKET_SIZE: usize = 255 + 2;
+        let mut buf = [0_u8; PACKET_SIZE];
+        Ok(self
+            .stream_pinned()
+            .read_packet(&mut buf[..])
+            .await?
+            .clone_buf())
+    }
 }
-impl<S: HCIWriter + HCIReader + HCIFilterable> AsRef<Stream<S>> for Adapter<S> {
-    fn as_ref(&self) -> &Stream<S> {
+impl<R: HCIWriter + HCIReader + HCIFilterable> AsRef<Stream<R>> for Adapter<R> {
+    fn as_ref(&self) -> &Stream<R> {
         &self.stream
     }
 }
 
-impl<S: HCIWriter + HCIReader + HCIFilterable> AsMut<Stream<S>> for Adapter<S> {
-    fn as_mut(&mut self) -> &mut Stream<S> {
+impl<R: HCIWriter + HCIReader + HCIFilterable> AsMut<Stream<R>> for Adapter<R> {
+    fn as_mut(&mut self) -> &mut Stream<R> {
         &mut self.stream
-    }
-}
-
-pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> {
-    adapter: &'a mut Adapter<S>,
-    buf: Buf,
-}
-impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage> futures_core::stream::Stream
-    for PacketStream<'a, S, Buf>
-{
-    type Item = Result<RawPacket<Buf>, Error>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = &mut *self;
-        Pin::new(&mut this.adapter.stream.read_packet(this.buf.as_mut()))
-            .poll(cx)
-            .map(|r| Some(r.map(|p| p.clone_buf()).map_err(Error::StreamError)))
     }
 }
