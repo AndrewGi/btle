@@ -1,3 +1,4 @@
+//! Reexports of all the HCI LE Message/Packet types.
 use super::*;
 pub mod commands {
     pub use super::advertise::SetAdvertisingData;
@@ -8,8 +9,8 @@ pub mod commands {
 
     pub use super::mask::SetEventMask;
 
-    pub use super::report::AdvertisingReport;
-
     pub use super::random::Rand;
 }
-pub mod events {}
+pub mod events {
+    pub use super::report::AdvertisingReport;
+}

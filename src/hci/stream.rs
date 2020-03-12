@@ -1,3 +1,5 @@
+//! HCI Stream. Abstracts over byte read/write functions to allow for reading events and writting
+//! commands.
 use crate::bytes::Storage;
 use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
@@ -26,6 +28,9 @@ impl From<PackError> for Error {
     }
 }
 impl error::Error for Error {}
+/// HCI Filter. Sets what kind of HCI Packets and HCI Events are received by the HCI Stream.\
+/// Designed around the BlueZ socket filter so this type may change in the future be more
+/// platform agnostic.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 pub struct Filter {
     type_mask: u32,
@@ -137,6 +142,8 @@ pub trait HCIReader: Unpin {
         buf: &mut [u8],
     ) -> Poll<Result<usize, Error>>;
 }
+/// HCI Stream. Wraps the `poll_read` and `poll_write` methods of [`HCIReader`] and [`HCIWriter`]
+/// to provide the [`Stream::read_packet`] and [`Stream::send_command`] functions.
 pub struct Stream<S: HCIReader> {
     pub stream: S,
 }

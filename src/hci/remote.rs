@@ -1,3 +1,4 @@
+//! Remote HCI Controller (WIP).
 use std::{io, net};
 pub struct Client(pub net::TcpStream);
 impl io::Write for Client {

@@ -1,3 +1,4 @@
+//! Generic BLE Advertiser (WIP)
 use crate::advertisement::{IncomingAdvertisement, OutgoingAdvertisement};
 use crate::BoxFuture;
 use core::fmt::Formatter;

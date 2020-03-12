@@ -1,3 +1,4 @@
+//! Bluetooth URI type. According to Bluetooth Assigned Numbers.
 use core::convert::TryFrom;
 use core::fmt::{Display, Error, Formatter};
 use core::str::FromStr;

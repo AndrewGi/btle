@@ -1,8 +1,12 @@
+//! Byte buffer, packing and unpacking utilities. Provides traits for genericly packing types into
+//! different endian byte buffers ([`ToFromBytesEndian`]) and for storing
+//! bytes/copy-types ([`Storage`])
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::ops;
-#[derive(Copy, Clone)]
+/// Byte Endian
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum Endian {
     Big,
     Little,
@@ -35,6 +39,7 @@ pub enum BufError {
     /// Input is completely invalid. Used when unable to pinpoint an index where the bad bytes are.
     InvalidInput,
 }
+/// Trait for types that can be packed/unpack into/from bytes in either endian.
 pub trait ToFromBytesEndian: Sized {
     type AsBytesType: AsRef<[u8]>;
 

@@ -1,3 +1,4 @@
+//! LE [`AdvertisingReport`] and [`ReportInfo`] types.
 use crate::advertisement::MAX_ADV_LEN;
 use crate::bytes::{StaticBuf, Storage};
 use crate::hci::le::{MetaEvent, MetaEventCode};
@@ -49,6 +50,17 @@ pub enum EventType {
     AdvScanInd = 0x02,
     AdvNonconnInd = 0x03,
     ScanRsp = 0x04,
+}
+impl EventType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EventType::AdvInd => "ADV_IND",
+            EventType::AdvDirectInd => "ADV_DIRECT_IND",
+            EventType::AdvScanInd => "ADV_SCAN_IND",
+            EventType::AdvNonconnInd => "ADV_NONNCONN_IND",
+            EventType::ScanRsp => "SCAN_RSP",
+        }
+    }
 }
 impl TryFrom<u8> for EventType {
     type Error = ConversionError;

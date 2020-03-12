@@ -1,10 +1,11 @@
+//! LE [`SetScanEnable`], [`SetScanParameters`], and other primitive scan types.
 use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
 use crate::hci::le::{LEControllerOpcode, OwnAddressType};
 use crate::hci::Opcode;
 use crate::{ConversionError, PackError};
-use std::convert::TryFrom;
+use core::convert::TryFrom;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetScanEnable {

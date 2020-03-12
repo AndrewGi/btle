@@ -24,20 +24,20 @@ pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;
 extern crate std;
 
 use core::convert::{TryFrom, TryInto};
-pub mod adapter;
 pub mod advertisement;
 pub mod advertiser;
 pub mod bytes;
 pub mod error;
 #[cfg(feature = "hci")]
 pub mod hci;
-pub mod manager;
 pub mod uri;
 
 /// Basic `ConversionError` for when primitives can't be converted to/from bytes because of invalid
 /// states. Most modules use their own errors for when there is more information to report.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct ConversionError(());
+/// Byte Packing/Unpacking error. Usually used for packing/unpacking a struct/type into/from
+/// a byte buffer.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum PackError {
     BadOpcode,
@@ -59,7 +59,7 @@ impl PackError {
             Ok(())
         }
     }
-
+    /// Returns `PackError::BadBytes { index: Some(index) }`.
     #[inline]
     pub fn bad_index(index: usize) -> PackError {
         PackError::BadBytes { index: Some(index) }
@@ -136,7 +136,10 @@ impl MilliDBM {
         MilliDBM(milli_dbm)
     }
 }
+/// Bluetooth address length (6 bytes)
 pub const BT_ADDRESS_LEN: usize = 6;
+
+/// Bluetooth Address. 6 bytes long.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct BTAddress(pub [u8; BT_ADDRESS_LEN]);
 impl BTAddress {

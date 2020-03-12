@@ -1,9 +1,12 @@
+//! HCI Command and command utilities.
 use crate::hci::event::ReturnParameters;
 use crate::hci::packet::PacketType;
 use crate::hci::{Opcode, OPCODE_LEN};
 use crate::PackError;
 use core::convert::TryFrom;
 
+/// Raw HCI Command Packet. Stores command [`Opcode`] and `parameters` (byte buffer).
+/// [`Opcode`]: crate::hci::Opcode;
 pub struct CommandPacket<Storage: AsRef<[u8]>> {
     pub opcode: Opcode,
     pub parameters: Storage,
@@ -12,6 +15,7 @@ pub struct CommandHeader {
     pub opcode: Opcode,
     pub len: u8,
 }
+/// HCI Command trait for structs that are HCI commands.
 pub trait Command {
     type Return: ReturnParameters;
     fn opcode() -> Opcode;

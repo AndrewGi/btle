@@ -1,9 +1,9 @@
+//! HCI LE Layer. Handles everything from advertising, scanning, LE links, etc.
 pub mod advertise;
 pub mod mask;
-/// Reexports of all the HCI LE message types.
 pub mod messages;
 pub mod report;
-pub use messages::commands::*;
+pub use messages::*;
 pub mod random;
 pub mod scan;
 use crate::hci::event::{Event, EventCode};

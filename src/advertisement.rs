@@ -1,3 +1,4 @@
+//! BLE Advertisements. Provides processing of Advertisement Structs.
 use crate::advertisement::AdStructure::Unknown;
 use crate::MilliDBM;
 use core::convert::TryFrom;

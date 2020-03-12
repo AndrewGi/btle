@@ -1,3 +1,4 @@
+//! Link Controller module (WIP).
 use crate::hci::{Opcode, OCF, OGF};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

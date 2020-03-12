@@ -1,10 +1,11 @@
+//! LE [`SetEventMask`] and [`EventMask`] for dealing with LE event masks.
 use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
 use crate::hci::le::{LEControllerOpcode, MetaEventCode};
 use crate::hci::Opcode;
 use crate::{ConversionError, PackError};
-use std::convert::TryFrom;
+use core::convert::TryFrom;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct EventMask(u64);

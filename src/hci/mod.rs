@@ -1,6 +1,7 @@
-//! HCI Layer is Little Endian.
+//! HCI Layer (where most the magic happens). Implements a Bluetooth Adapter for any controller
+//! supporting HCI streams.
+//! (HCI Layer is Little Endian).
 pub mod adapters;
-pub mod advertiser;
 pub mod command;
 pub mod event;
 pub mod le;
@@ -14,10 +15,7 @@ pub mod stream;
 use crate::bytes::ToFromBytesEndian;
 use crate::{ConversionError, PackError};
 use core::convert::{TryFrom, TryInto};
-use std::fmt::Formatter;
-
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct HCIVersionError(());
+use core::fmt::Formatter;
 
 pub const MAX_ACL_SIZE: usize = (1492 + 4);
 pub const MAX_SCO_SIZE: usize = 255;
@@ -70,7 +68,7 @@ impl From<Version> for u8 {
     }
 }
 impl TryFrom<u8> for Version {
-    type Error = HCIVersionError;
+    type Error = ConversionError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -86,10 +84,11 @@ impl TryFrom<u8> for Version {
             9 => Ok(Version::Bluetooth5v0),
             10 => Ok(Version::Bluetooth5v1),
             11 => Ok(Version::Bluetooth5v2),
-            _ => Err(HCIVersionError(())),
+            _ => Err(ConversionError(())),
         }
     }
 }
+/// HCI Error Code. Usually returned from an HCI Controller after each sent command.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[repr(u8)]
 pub enum ErrorCode {
@@ -357,7 +356,7 @@ impl From<OCF> for u16 {
         ocf.0
     }
 }
-const OPCODE_LEN: usize = 2;
+pub const OPCODE_LEN: usize = 2;
 /// 16-bit HCI Opcode. Contains a OGF (OpCode Ground Field) and OCF (OpCode Command Field).
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 pub struct Opcode(pub OGF, pub OCF);

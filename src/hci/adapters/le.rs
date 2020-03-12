@@ -30,7 +30,7 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
         filter_duplicates: bool,
     ) -> Result<(), adapters::Error> {
         self.adapter_mut()
-            .send_command(le::SetScanEnable {
+            .send_command(le::commands::SetScanEnable {
                 is_enabled,
                 filter_duplicates,
             })
@@ -42,7 +42,7 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     }
     pub async fn set_scan_parameters(
         &mut self,
-        scan_parameters: le::SetScanParameters,
+        scan_parameters: le::commands::SetScanParameters,
     ) -> Result<(), adapters::Error> {
         self.adapter_mut()
             .send_command(scan_parameters)
@@ -57,7 +57,7 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
         is_enabled: bool,
     ) -> Result<(), adapters::Error> {
         self.adapter_mut()
-            .send_command(le::SetAdvertisingEnable { is_enabled })
+            .send_command(le::commands::SetAdvertisingEnable { is_enabled })
             .await?
             .params
             .status
@@ -66,7 +66,10 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     }
     /// Get `RAND_LEN` (8) bytes from the HCI Controller.
     pub async fn get_rand(&mut self) -> Result<[u8; RAND_LEN], adapters::Error> {
-        let r = self.adapter_mut().send_command(le::Rand {}).await?;
+        let r = self
+            .adapter_mut()
+            .send_command(le::commands::Rand {})
+            .await?;
         r.params.status.error()?;
         Ok(r.params.random_bytes)
     }
@@ -100,7 +103,7 @@ pub struct AdvertisementStream<
     PacketBuf: Storage<u8> = StaticEventBuffer,
 > {
     adapter: &'a mut LEAdapter<'b, S>,
-    last_report: Option<(le::AdvertisingReport<Buf, ReportBuf>, usize)>,
+    last_report: Option<(le::events::AdvertisingReport<Buf, ReportBuf>, usize)>,
     marker_: core::marker::PhantomData<PacketBuf>,
 }
 impl<
@@ -153,7 +156,7 @@ impl<
             };
 
         let reports = match EventPacket::try_from(packet.as_ref())
-            .map(|p| le::AdvertisingReport::unpack_event_packet(&p))
+            .map(|p| le::events::AdvertisingReport::unpack_event_packet(&p))
         {
             Ok(Ok(reports)) => reports,
             Ok(Err(e)) | Err(e) => {

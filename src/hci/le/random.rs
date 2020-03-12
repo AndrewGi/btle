@@ -1,9 +1,10 @@
+//! LE [`Rand`] command and return parameters.
 use crate::hci::command::Command;
 use crate::hci::event::ReturnParameters;
 use crate::hci::le::LEControllerOpcode;
 use crate::hci::{ErrorCode, Opcode};
 use crate::PackError;
-use std::convert::{TryFrom, TryInto};
+use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Default)]
 pub struct Rand {}

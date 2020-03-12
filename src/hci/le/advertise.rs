@@ -1,3 +1,4 @@
+//! LE [`SetAdvertisingEnable`], [`SetAdvertisingData`] and other advertising types.
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
 use crate::hci::le::LEControllerOpcode;

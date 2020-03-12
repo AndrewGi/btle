@@ -1,7 +1,9 @@
+//! HCI Packet type. Packets are sent and received from an HCI Controller.
 use crate::bytes::Storage;
 use crate::{ConversionError, PackError};
-use std::convert::{TryFrom, TryInto};
+use core::convert::{TryFrom, TryInto};
 
+/// HCI Packet Type.
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
 #[repr(u8)]
 pub enum PacketType {
@@ -35,6 +37,7 @@ impl TryFrom<u8> for PacketType {
         }
     }
 }
+/// Raw HCI Packet. Stores the [`PacketType`] + packet data buf (bytes).
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct RawPacket<Buf: AsRef<[u8]>> {
     pub packet_type: PacketType,
@@ -66,13 +69,24 @@ impl<'a> TryFrom<&'a [u8]> for RawPacket<&'a [u8]> {
         })
     }
 }
+/// For types that can be turned into a HCI Packet ([`RawPacket`]). Because of Rust specialization
+/// restrictions (specialization can't come soon enough to stable), [`Packet`] is usually just
+/// implement for `RawEvent`, `RawCommand`, etc instead of `Event`, `Command`, etc. Once
+/// specialization is stable, that may change.
 pub trait Packet {
+    /// HCI Packet type.
     const PACKET_TYPE: PacketType;
+    /// HCI Packet parameters len (byte len).
     fn packet_byte_len(&self) -> usize;
+    /// Pack the HCI Packet parameters into a byte buffer.
+    /// # Important
+    /// `self.packet_byte_len() == buf.len()` or `PackError::BadLength` might be thrown.
     fn packet_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
+    /// Unpack a byte buffer into `Self` (a packet type).
     fn packet_unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized;
+    /// Pack a buffer with a full packet (`self.packet_pack_into` + `PacketType`).
     /// Automatically trims `buf` to the correct len.
     fn packet_pack_full(&self, buf: &mut [u8]) -> Result<usize, PackError> {
         let full = self.packet_byte_len() + 1;

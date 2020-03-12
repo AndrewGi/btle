@@ -1,4 +1,4 @@
-# btle
+# btle - Rust Bluetooth Low Energy Driver
 Cross-platform Bluetooth Low Energy library for Rust. Supports Central, Peripheral, Broadcaster and Observer GAP roles. Also supports custom device drivers to enable platform support for custom platforms (embedded, etc).
 
 Very much WIP.
@@ -31,7 +31,7 @@ pub async fn dump_adapter<S: btle::hci::stream::HCIStreamable>(
     let mut adapter = Pin::new(&mut adapter);
     let mut le = adapter.as_mut().le();
     // Set BLE Scan parameters (when to scan, how long, etc)
-    le.set_scan_parameters(le::SetScanParameters::DEFAULT)
+    le.set_scan_parameters(le::commands::SetScanParameters::DEFAULT)
         .await?;
     // Enable scanning for advertisement packets.
     le.set_scan_enabled(true, false).await?;
@@ -55,4 +55,5 @@ pub async fn dump_adapter<S: btle::hci::stream::HCIStreamable>(
         }
     }
 }
+
 ```
