@@ -1,3 +1,4 @@
+use crate::advertisement::MAX_ADV_LEN;
 use crate::bytes::Storage;
 use crate::hci::event::{Event, EventPacket, StaticEventBuffer};
 use crate::hci::le;
@@ -24,6 +25,20 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     pub fn adapter_ref(&self) -> Pin<&adapters::Adapter<S>> {
         self.adapter.as_ref()
     }
+    /// Set advertising data (0-31 bytes).
+    pub async fn set_advertising_data(&mut self, data: &[u8]) -> Result<(), adapters::Error> {
+        if data.len() > MAX_ADV_LEN {
+            return Err(adapters::Error::BadParameter);
+        }
+        self.adapter_mut()
+            .send_command(le::commands::SetAdvertisingData::new(data))
+            .await?
+            .params
+            .status
+            .error()?;
+        Ok(())
+    }
+    /// Read the advertising channel TX power in dBm. See [`le::advertise::TxPowerLevel`] for more.
     pub async fn get_advertising_tx_power(
         &mut self,
     ) -> Result<le::advertise::TxPowerLevel, adapters::Error> {
@@ -34,6 +49,8 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
         r.params.status.error()?;
         Ok(r.params.power_level)
     }
+    /// Set advertisement scanning enable/disable. [`LEAdapter::set_scan_parameters`] should be
+    /// called first to set any scanning parameters (how long, what type of advertisements, etc).
     pub async fn set_scan_enabled(
         &mut self,
         is_enabled: bool,
@@ -50,6 +67,7 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
             .error()?;
         Ok(())
     }
+    /// Set advertisement scanning parameters. See [`le::commands::SetScanParameters`] for more.
     pub async fn set_scan_parameters(
         &mut self,
         scan_parameters: le::commands::SetScanParameters,
@@ -62,6 +80,9 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
             .error()?;
         Ok(())
     }
+    /// Enable or disable advertising. Make sure to set advertising parameters
+    /// ([`LEAdapter::set_advertising_parameters`]) and advertising data
+    /// ([`LEAdapter::set_advertising_data`]) before calling this function.
     pub async fn set_advertising_enabled(
         &mut self,
         is_enabled: bool,
@@ -74,6 +95,7 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
             .error()?;
         Ok(())
     }
+    /// Set advertising parameters. See [`le::commands::SetAdvertisingParameters`] for more.
     pub async fn set_advertising_parameters(
         &mut self,
         parameters: le::commands::SetAdvertisingParameters,

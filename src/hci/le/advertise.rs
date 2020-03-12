@@ -450,7 +450,7 @@ impl Command for ReadAdvertisingChannelTxPower {
         Ok(ReadAdvertisingChannelTxPower {})
     }
 }
-/// Tx Power Level in dBm. Accuracy +-4 dB.
+/// Tx Power Level in dBm. Accuracy +-4 dB. Range (-127 to +20 dBm).
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Default)]
 pub struct TxPowerLevel(i8);
 impl TxPowerLevel {

@@ -11,18 +11,16 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 
 [features]
 default = ["hci",  "std"]
-bluez = ["nix", "libc", "std", "hci"]
-bluez_async = ["bluez", "async", "tokio/uds"]
-async = ["tokio"]
+bluez = ["nix", "libc", "std", "hci", "tokio/uds"]
 hci = []
-std = ["futures-core/std", "futures-io/std", "futures-util/std", "futures-task/std"]
+std = ["futures-core/std", "futures-io/std", "futures-util/alloc", "futures-task/std"]
 remote = ["std", "hci"]
 
 [dependencies]
 futures-core = {version = "0.3.4", default_features = false, features=["alloc"]}
 futures-sink = {version = "0.3.4", default_features = false}
 futures-io = {version = "0.3.4", default_features = false, optional = true}
-futures-util = {version = "0.3.4", default_features = false, optional = true}
+futures-util = {version = "0.3.4", default_features = false}
 futures-task = {version = "0.3.4", default_features = false, optional = true}
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2.66", optional = true}
@@ -30,4 +28,4 @@ tokio = {version = "0.2.12", optional = true, default_features = false}
 
 [[example]]
 name = "advertisement_dump"
-required-features = ["std", "bluez_async"]
+required-features = ["std", "bluez"]

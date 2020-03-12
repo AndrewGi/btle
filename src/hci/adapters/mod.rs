@@ -12,6 +12,7 @@ use core::pin::Pin;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum Error {
+    BadParameter,
     StreamError(stream::Error),
     ErrorCode(hci::ErrorCode),
 }

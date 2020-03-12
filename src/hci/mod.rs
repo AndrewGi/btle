@@ -9,7 +9,7 @@ pub mod link_control;
 pub mod packet;
 #[cfg(all(feature = "remote"))]
 pub mod remote;
-#[cfg(all(unix, feature = "std"))]
+#[cfg(all(unix, feature = "bluez"))]
 pub mod socket;
 pub mod stream;
 use crate::bytes::ToFromBytesEndian;
