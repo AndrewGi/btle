@@ -11,6 +11,7 @@ use crate::hci::{Opcode, OCF, OGF};
 use crate::{ConversionError, PackError};
 use core::convert::TryFrom;
 
+/// OCF LE Controller code.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 #[repr(u16)]
 pub enum LEControllerOpcode {
@@ -99,6 +100,7 @@ impl From<LEControllerOpcode> for Opcode {
         Opcode(OGF::LEController, opcode.into())
     }
 }
+/// LE Meta Event code. Similar to `EventCode` but just for LE events.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum MetaEventCode {
     ConnectionComplete = 0x01,
@@ -188,6 +190,9 @@ impl TryFrom<u8> for MetaEventCode {
         }
     }
 }
+/// Bluetooth Low Energy Meta Event. Just like a regular event (with a event code of
+/// `EventCode::LEMeta`) but with an extra `META_CODE` field (1 byte) that allows for multiple
+/// LE Meta events.
 pub trait MetaEvent {
     const META_CODE: MetaEventCode;
     fn byte_len(&self) -> usize;
@@ -224,31 +229,5 @@ impl<M: MetaEvent> Event for M {
         <Self as MetaEvent>::pack_into(self, &mut buf[1..])?;
         buf[0] = Self::META_CODE.into();
         Ok(())
-    }
-}
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub enum OwnAddressType {
-    Public = 0x00,
-    Random = 0x01,
-    PrivateOrPublic = 0x02,
-    PrivateOrRandom = 0x03,
-}
-
-impl From<OwnAddressType> for u8 {
-    fn from(s: OwnAddressType) -> Self {
-        s as u8
-    }
-}
-impl TryFrom<u8> for OwnAddressType {
-    type Error = ConversionError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(OwnAddressType::Public),
-            1 => Ok(OwnAddressType::Random),
-            2 => Ok(OwnAddressType::PrivateOrPublic),
-            3 => Ok(OwnAddressType::PrivateOrRandom),
-            _ => Err(ConversionError(())),
-        }
     }
 }

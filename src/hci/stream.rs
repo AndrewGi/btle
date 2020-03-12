@@ -5,7 +5,7 @@ use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{Opcode, FULL_COMMAND_MAX_LEN};
-use crate::{error, PackError};
+use crate::{error, poll_fn, PackError};
 use core::convert::{TryFrom, TryInto};
 use core::future::Future;
 use core::pin::Pin;
@@ -160,13 +160,10 @@ impl<S: HCIReader> Stream<S> {
         S: HCIWriter,
     {
         while !buf.is_empty() {
-            let amount = futures_util::future::poll_fn(|cx| {
-                self.as_mut().stream_pinned().poll_write(cx, buf)
-            })
-            .await?;
+            let amount = poll_fn(|cx| self.as_mut().stream_pinned().poll_write(cx, buf)).await?;
             buf = &buf[amount..];
         }
-        futures_util::future::poll_fn(|cx| self.as_mut().stream_pinned().poll_flush(cx)).await
+        poll_fn(|cx| self.as_mut().stream_pinned().poll_flush(cx)).await
     }
     pub async fn send_command<Cmd: Command>(
         mut self: Pin<&mut Self>,
@@ -218,7 +215,7 @@ impl<S: HCIReader> Stream<S> {
         Err(Error::StreamFailed)
     }
     pub async fn read_bytes(mut self: Pin<&mut Self>, buf: &mut [u8]) -> Result<usize, Error> {
-        futures_util::future::poll_fn(|cx| self.as_mut().stream_pinned().poll_read(cx, buf)).await
+        poll_fn(|cx| self.as_mut().stream_pinned().poll_read(cx, buf)).await
     }
     pub fn read_packet<'r, 'b>(&'r mut self, buf: &'b mut [u8]) -> ByteRead<'b, 'r, S> {
         ByteRead::new(&mut self.stream, buf)

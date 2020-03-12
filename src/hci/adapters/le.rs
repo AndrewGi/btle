@@ -9,7 +9,7 @@ use crate::hci::{adapters, stream};
 use core::convert::TryFrom;
 use core::future::Future;
 use core::pin::Pin;
-use futures_task::{Context, Poll};
+use core::task::{Context, Poll};
 
 pub struct LEAdapter<'a, S: HCIStreamable> {
     adapter: Pin<&'a mut adapters::Adapter<S>>,

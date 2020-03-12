@@ -2,7 +2,7 @@
 use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
-use crate::hci::le::{LEControllerOpcode, OwnAddressType};
+use crate::hci::le::LEControllerOpcode;
 use crate::hci::Opcode;
 use crate::{ConversionError, PackError};
 use core::convert::TryFrom;
@@ -134,6 +134,33 @@ impl From<ScanWindow> for u16 {
 impl Default for ScanWindow {
     fn default() -> Self {
         Self::DEFAULT
+    }
+}
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub enum OwnAddressType {
+    Public = 0x00,
+    Random = 0x01,
+    PrivateOrPublic = 0x02,
+    PrivateOrRandom = 0x03,
+}
+
+impl From<OwnAddressType> for u8 {
+    fn from(s: OwnAddressType) -> Self {
+        s as u8
+    }
+}
+impl TryFrom<u8> for OwnAddressType {
+    type Error = ConversionError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(OwnAddressType::Public),
+            1 => Ok(OwnAddressType::Random),
+            2 => Ok(OwnAddressType::PrivateOrPublic),
+            3 => Ok(OwnAddressType::PrivateOrRandom),
+            _ => Err(ConversionError(())),
+        }
     }
 }
 

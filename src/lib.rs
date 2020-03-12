@@ -28,6 +28,8 @@ pub mod advertisement;
 pub mod advertiser;
 pub mod bytes;
 pub mod error;
+pub mod poll_function;
+use poll_function::poll_fn;
 #[cfg(feature = "hci")]
 pub mod hci;
 pub mod uri;
