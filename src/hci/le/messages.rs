@@ -1,6 +1,7 @@
 //! Reexports of all the HCI LE Message/Packet types.
 use super::*;
 pub mod commands {
+    pub use super::advertise::ReadAdvertisingChannelTxPower;
     pub use super::advertise::SetAdvertisingData;
     pub use super::advertise::SetAdvertisingEnable;
     pub use super::advertise::SetAdvertisingParameters;

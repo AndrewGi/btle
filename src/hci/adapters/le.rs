@@ -24,6 +24,16 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     pub fn adapter_ref(&self) -> Pin<&adapters::Adapter<S>> {
         self.adapter.as_ref()
     }
+    pub async fn get_advertising_tx_power(
+        &mut self,
+    ) -> Result<le::advertise::TxPowerLevel, adapters::Error> {
+        let r = self
+            .adapter_mut()
+            .send_command(le::commands::ReadAdvertisingChannelTxPower {})
+            .await?;
+        r.params.status.error()?;
+        Ok(r.params.power_level)
+    }
     pub async fn set_scan_enabled(
         &mut self,
         is_enabled: bool,

@@ -1,10 +1,10 @@
 //! LE [`SetAdvertisingEnable`], [`SetAdvertisingData`] and other advertising types.
 use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
-use crate::hci::event::StatusReturn;
+use crate::hci::event::{ReturnParameters, StatusReturn};
 use crate::hci::le::LEControllerOpcode;
-use crate::hci::Opcode;
-use crate::{BTAddress, ConversionError, PackError, BT_ADDRESS_LEN};
+use crate::hci::{ErrorCode, Opcode};
+use crate::{BTAddress, ConversionError, PackError, BT_ADDRESS_LEN, RSSI};
 use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -235,6 +235,11 @@ pub enum Channels {
     Channel38 = 0x01,
     Channel39 = 0x02,
 }
+impl From<Channels> for u8 {
+    fn from(c: Channels) -> Self {
+        c as u8
+    }
+}
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct ChannelMap(u8);
 impl ChannelMap {
@@ -248,6 +253,15 @@ impl ChannelMap {
     pub fn new(map: u8) -> ChannelMap {
         assert!(map > Self::ALL_U8, "invalid channel map {}", map);
         ChannelMap(map)
+    }
+    pub fn enable_channel(&mut self, channel: Channels) {
+        self.0 |= 1u8 << u8::from(channel);
+    }
+    pub fn disable_channel(&mut self, channel: Channels) {
+        self.0 &= !(1u8 << u8::from(channel));
+    }
+    pub fn get_channel(self, channel: Channels) -> bool {
+        self.0 & (1u8 << u8::from(channel)) != 0
     }
 }
 
@@ -407,6 +421,123 @@ impl Command for SetAdvertisingParameters {
                 .map_err(|_| PackError::bad_index(7 + BT_ADDRESS_LEN))?,
             filter_policy: FilterPolicy::try_from(buf[8 + BT_ADDRESS_LEN])
                 .map_err(|_| PackError::bad_index(8 + BT_ADDRESS_LEN))?,
+        })
+    }
+}
+
+pub struct ReadAdvertisingChannelTxPower {}
+impl Command for ReadAdvertisingChannelTxPower {
+    type Return = TxPowerLevelReturn;
+
+    fn opcode() -> Opcode {
+        LEControllerOpcode::ReadAdvertisingChannelTxPower.into()
+    }
+
+    fn byte_len(&self) -> usize {
+        0
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(0, buf)?;
+        Ok(())
+    }
+
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    where
+        Self: Sized,
+    {
+        PackError::expect_length(0, buf)?;
+        Ok(ReadAdvertisingChannelTxPower {})
+    }
+}
+/// Tx Power Level in dBm. Accuracy +-4 dB.
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Default)]
+pub struct TxPowerLevel(i8);
+impl TxPowerLevel {
+    pub const MIN_DBM_I8: i8 = -127;
+    pub const MAX_DBM_I8: i8 = 20;
+    pub const MAX: TxPowerLevel = TxPowerLevel(Self::MAX_DBM_I8);
+    pub const MIN: TxPowerLevel = TxPowerLevel(Self::MIN_DBM_I8);
+    /// Creates a new RSSI from `dbm`.
+    /// # Panics
+    /// Panics if `dbm < Self::MIN || dbm > Self::MAX`.
+    pub fn new(dbm: i8) -> TxPowerLevel {
+        assert!(
+            dbm >= Self::MIN_DBM_I8 && dbm <= Self::MAX_DBM_I8,
+            "invalid power levle '{}'",
+            dbm
+        );
+        TxPowerLevel(dbm)
+    }
+}
+impl From<TxPowerLevel> for i8 {
+    fn from(rssi: TxPowerLevel) -> Self {
+        rssi.0
+    }
+}
+
+impl From<TxPowerLevel> for u8 {
+    fn from(rssi: TxPowerLevel) -> Self {
+        rssi.0 as u8
+    }
+}
+impl TryFrom<i8> for TxPowerLevel {
+    type Error = ConversionError;
+
+    fn try_from(value: i8) -> Result<Self, Self::Error> {
+        if value > Self::MAX_DBM_I8 || value < Self::MIN_DBM_I8 {
+            Err(ConversionError(()))
+        } else {
+            Ok(TxPowerLevel(value))
+        }
+    }
+}
+impl TryFrom<u8> for TxPowerLevel {
+    type Error = ConversionError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        (value as i8).try_into()
+    }
+}
+impl From<TxPowerLevel> for RSSI {
+    /// Power Level as RSSI have the same dBm range.
+    fn from(l: TxPowerLevel) -> Self {
+        RSSI(l.0)
+    }
+}
+impl From<RSSI> for TxPowerLevel {
+    /// Power Level as RSSI have the same dBm range.
+    fn from(rssi: RSSI) -> Self {
+        TxPowerLevel(rssi.0)
+    }
+}
+pub struct TxPowerLevelReturn {
+    pub status: ErrorCode,
+    pub power_level: TxPowerLevel,
+}
+impl TxPowerLevelReturn {
+    pub const BYTE_LEN: usize = 2;
+}
+impl ReturnParameters for TxPowerLevelReturn {
+    fn byte_len(&self) -> usize {
+        Self::BYTE_LEN
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(Self::BYTE_LEN, buf)?;
+        buf[0] = self.status.into();
+        buf[1] = self.power_level.into();
+        Ok(())
+    }
+
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    where
+        Self: Sized,
+    {
+        PackError::expect_length(Self::BYTE_LEN, buf)?;
+        Ok(TxPowerLevelReturn {
+            status: ErrorCode::try_from(buf[0]).map_err(|_| PackError::bad_index(0))?,
+            power_level: TxPowerLevel::try_from(buf[1]).map_err(|_| PackError::bad_index(1))?,
         })
     }
 }
