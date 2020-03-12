@@ -10,7 +10,7 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["hci"]
+default = ["hci",  "std"]
 bluez = ["nix", "libc", "std", "hci"]
 bluez_async = ["bluez", "async", "tokio/uds"]
 async = ["tokio"]
