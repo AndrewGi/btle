@@ -163,7 +163,7 @@ impl TryFrom<u8> for OwnAddressType {
         }
     }
 }
-
+/// Advertising scan type (Active or Passive).
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum ScanType {
     Passive = 0x00,

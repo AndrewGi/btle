@@ -3,6 +3,7 @@ use super::*;
 pub mod commands {
     pub use super::advertise::SetAdvertisingData;
     pub use super::advertise::SetAdvertisingEnable;
+    pub use super::advertise::SetAdvertisingParameters;
 
     pub use super::scan::SetScanEnable;
     pub use super::scan::SetScanParameters;

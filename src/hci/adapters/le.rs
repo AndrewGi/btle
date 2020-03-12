@@ -64,6 +64,18 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
             .error()?;
         Ok(())
     }
+    pub async fn set_advertising_parameters(
+        &mut self,
+        parameters: le::commands::SetAdvertisingParameters,
+    ) -> Result<(), adapters::Error> {
+        self.adapter_mut()
+            .send_command(parameters)
+            .await?
+            .params
+            .status
+            .error()?;
+        Ok(())
+    }
     /// Get `RAND_LEN` (8) bytes from the HCI Controller.
     pub async fn get_rand(&mut self) -> Result<[u8; RAND_LEN], adapters::Error> {
         let r = self
