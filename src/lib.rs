@@ -28,10 +28,9 @@ pub mod advertisement;
 pub mod advertiser;
 pub mod bytes;
 pub mod error;
-pub mod poll_function;
-use poll_function::poll_fn;
 #[cfg(feature = "hci")]
 pub mod hci;
+pub mod poll_function;
 pub mod uri;
 
 /// Basic `ConversionError` for when primitives can't be converted to/from bytes because of invalid

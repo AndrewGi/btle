@@ -1,6 +1,5 @@
 //! BLE Advertisements. Provides processing of Advertisement Structs.
-use crate::advertisement::AdStructure::Unknown;
-use crate::MilliDBM;
+use crate::RSSI;
 use core::convert::TryFrom;
 use core::mem;
 
@@ -124,7 +123,7 @@ impl AdStructure {
     /// Panics if `data` won'f fit in `AdStructureDataBuffer` (look at `AdStructureDataBuffer::new`).
     pub fn new(ad_type: AdType, data: &[u8]) -> AdStructure {
         match ad_type {
-            _ => Unknown(ad_type, AdStructureDataBuffer::new(data)),
+            _ => AdStructure::Unknown(ad_type, AdStructureDataBuffer::new(data)),
         }
     }
     pub fn data(&self) -> &[u8] {
@@ -132,7 +131,7 @@ impl AdStructure {
             AdStructure::MeshPDU(b)
             | AdStructure::MeshBeacon(b)
             | AdStructure::MeshProvision(b)
-            | Unknown(_, b) => b.as_ref(),
+            | AdStructure::Unknown(_, b) => b.as_ref(),
         }
     }
     pub fn ad_type(&self) -> AdType {
@@ -140,7 +139,7 @@ impl AdStructure {
             AdStructure::MeshPDU(_) => AdType::MeshPDU,
             AdStructure::MeshBeacon(_) => AdType::MeshBeacon,
             AdStructure::MeshProvision(_) => AdType::PbAdv,
-            Unknown(t, _) => *t,
+            AdStructure::Unknown(t, _) => *t,
         }
     }
     pub fn len(&self) -> usize {
@@ -149,7 +148,7 @@ impl AdStructure {
             AdStructure::MeshPDU(b)
             | AdStructure::MeshBeacon(b)
             | AdStructure::MeshProvision(b)
-            | Unknown(_, b) => b.len() + 2,
+            | AdStructure::Unknown(_, b) => b.len() + 2,
         }
     }
 }
@@ -203,7 +202,7 @@ pub const MAX_ADV_LEN: usize = 31;
 pub struct RawAdvertisement {
     buf: [u8; MAX_ADV_LEN],
     len: usize,
-    rssi: Option<MilliDBM>,
+    rssi: Option<RSSI>,
 }
 impl RawAdvertisement {
     /// Inserts a `AdStructure` into a `RawAdvertisement`
@@ -239,7 +238,7 @@ impl RawAdvertisement {
             data: self.as_ref(),
         }
     }
-    pub fn rssi(&self) -> Option<MilliDBM> {
+    pub fn rssi(&self) -> Option<RSSI> {
         self.rssi
     }
 }
@@ -250,13 +249,13 @@ impl AsRef<[u8]> for RawAdvertisement {
 }
 pub struct IncomingAdvertisement {
     adv: RawAdvertisement,
-    rssi: Option<MilliDBM>,
+    rssi: Option<RSSI>,
 }
 impl IncomingAdvertisement {
     pub fn adv(&self) -> &RawAdvertisement {
         &self.adv
     }
-    pub fn rssi(&self) -> Option<MilliDBM> {
+    pub fn rssi(&self) -> Option<RSSI> {
         self.rssi
     }
 }
