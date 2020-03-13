@@ -51,13 +51,13 @@ impl PackError {
     /// `Err(HCIPackError::BadLength)` not equal.
     #[inline]
     pub fn expect_length(expected: usize, buf: &[u8]) -> Result<(), PackError> {
-        if buf.len() != expected {
+        if buf.len() == expected {
+            Ok(())
+        } else {
             Err(PackError::BadLength {
                 expected,
                 got: buf.len(),
             })
-        } else {
-            Ok(())
         }
     }
     /// Returns `PackError::BadBytes { index: Some(index) }`.
@@ -157,7 +157,7 @@ impl BTAddress {
         PackError::expect_length(BT_ADDRESS_LEN, bytes)?;
         Ok(Self::new(bytes))
     }
-    pub fn pack_into(&self, bytes: &mut [u8]) -> Result<(), PackError> {
+    pub fn pack_into(self, bytes: &mut [u8]) -> Result<(), PackError> {
         PackError::expect_length(BT_ADDRESS_LEN, bytes)?;
         bytes.copy_from_slice(&self.0[..]);
         Ok(())
