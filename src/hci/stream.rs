@@ -5,7 +5,7 @@ use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{Opcode, FULL_COMMAND_MAX_LEN};
-use crate::{error, poll_fn, PackError};
+use crate::{error, poll_function::poll_fn, PackError};
 use core::convert::{TryFrom, TryInto};
 use core::future::Future;
 use core::pin::Pin;
