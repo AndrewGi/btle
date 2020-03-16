@@ -10,9 +10,11 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["hci",  "std"]
+default = ["hci",  "std", "tokio_asyncs"]
 bluez = ["nix", "libc", "std", "hci", "tokio/uds"]
 hci = []
+asyncs = []
+tokio_asyncs = ["asyncs", "tokio/time", "tokio/sync", "tokio/rt-core"]
 std = ["futures-core/std", "futures-io/std", "futures-util/alloc", "futures-task/std"]
 remote = ["std", "hci"]
 
@@ -24,7 +26,7 @@ futures-util = {version = "0.3.4", default_features = false}
 futures-task = {version = "0.3.4", default_features = false, optional = true}
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2.66", optional = true}
-tokio = {version = "0.2.12", optional = true, default_features = false}
+tokio = {version = "0.2.13", optional = true, default_features = false}
 
 [[example]]
 name = "advertisement_dump"

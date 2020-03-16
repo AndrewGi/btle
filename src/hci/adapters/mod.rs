@@ -4,18 +4,13 @@ use crate::bytes::Storage;
 use crate::hci::command::Command;
 use crate::hci::event::CommandComplete;
 use crate::hci::packet::RawPacket;
-use crate::hci::stream::{HCIFilterable, HCIReader, HCIWriter, Stream};
+use crate::hci::stream::{HCIStreamable, Stream};
 use crate::hci::{stream, ErrorCode};
+use crate::le::adapter::Error;
 use crate::{error, hci};
 use core::fmt::Formatter;
 use core::pin::Pin;
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub enum Error {
-    BadParameter,
-    StreamError(stream::Error),
-    ErrorCode(hci::ErrorCode),
-}
 impl From<stream::Error> for Error {
     fn from(e: stream::Error) -> Self {
         Error::StreamError(e)
@@ -32,11 +27,11 @@ impl core::fmt::Display for Error {
     }
 }
 impl error::Error for Error {}
-pub struct Adapter<R: HCIWriter + HCIReader + HCIFilterable> {
+pub struct Adapter<R: HCIStreamable> {
     pub stream: Stream<R>,
     _marker: (),
 }
-impl<R: HCIWriter + HCIReader + HCIFilterable> Adapter<R> {
+impl<R: HCIStreamable> Adapter<R> {
     pub fn new(stream: Stream<R>) -> Self {
         Self {
             stream,
@@ -61,7 +56,7 @@ impl<R: HCIWriter + HCIReader + HCIFilterable> Adapter<R> {
             .await
             .map_err(Error::StreamError)
     }
-    /// Read a
+    /// Read a `RawPacket`
     pub async fn read_packet<S: Storage<u8>>(self: Pin<&mut Self>) -> Result<RawPacket<S>, Error> {
         const PACKET_SIZE: usize = 255 + 2;
         let mut buf = [0_u8; PACKET_SIZE];
@@ -72,13 +67,13 @@ impl<R: HCIWriter + HCIReader + HCIFilterable> Adapter<R> {
             .clone_buf())
     }
 }
-impl<R: HCIWriter + HCIReader + HCIFilterable> AsRef<Stream<R>> for Adapter<R> {
+impl<R: HCIStreamable> AsRef<Stream<R>> for Adapter<R> {
     fn as_ref(&self) -> &Stream<R> {
         &self.stream
     }
 }
 
-impl<R: HCIWriter + HCIReader + HCIFilterable> AsMut<Stream<R>> for Adapter<R> {
+impl<R: HCIStreamable> AsMut<Stream<R>> for Adapter<R> {
     fn as_mut(&mut self) -> &mut Stream<R> {
         &mut self.stream
     }

@@ -10,23 +10,23 @@ pub trait Error: core::fmt::Debug {
     }
 }
 
-pub struct STDError<E: Error + ?Sized>(pub E);
-impl<E: Error> From<E> for STDError<E> {
+pub struct StdError<E: Error + ?Sized>(pub E);
+impl<E: Error> From<E> for StdError<E> {
     fn from(e: E) -> Self {
         Self(e)
     }
 }
-impl<E: Error> core::fmt::Debug for STDError<E> {
+impl<E: Error> core::fmt::Debug for StdError<E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         write!(f, "{:?}", self.0)
     }
 }
-impl<T: Error> core::fmt::Display for STDError<T> {
+impl<T: Error> core::fmt::Display for StdError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         write!(f, "{:?}", self.0)
     }
 }
 
-impl<E: Error> Error for STDError<E> {}
+impl<E: Error> Error for StdError<E> {}
 #[cfg(feature = "std")]
-impl<E: Error> std::error::Error for STDError<E> {}
+impl<E: Error> std::error::Error for StdError<E> {}

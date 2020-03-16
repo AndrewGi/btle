@@ -19,20 +19,21 @@
 extern crate alloc;
 /// Workaround for returning futures from async Traits.
 pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;
+/// Workaround for returning streams from async Traits.
+pub type BoxStream<'a, T> = futures_core::stream::BoxStream<'a, T>;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
 
 use core::convert::{TryFrom, TryInto};
-pub mod advertisement;
-pub mod advertiser;
+
+pub mod asyncs;
 pub mod bytes;
 pub mod error;
-#[cfg(feature = "hci")]
 pub mod hci;
+pub mod le;
 pub mod poll_function;
 pub mod uri;
-
 /// Basic `ConversionError` for when primitives can't be converted to/from bytes because of invalid
 /// states. Most modules use their own errors for when there is more information to report.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]

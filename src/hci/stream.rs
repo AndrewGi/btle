@@ -11,17 +11,6 @@ use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
-pub enum Error {
-    CommandError(PackError),
-    UnsupportedPacketType(u8),
-    BadOpcode,
-    BadEventCode,
-    BadPacketCode,
-    StreamClosed,
-    StreamFailed,
-    IOError,
-}
 impl From<PackError> for Error {
     fn from(e: PackError) -> Self {
         Error::CommandError(e)
@@ -285,8 +274,8 @@ impl<T: futures_io::AsyncWrite> HCIWriter for T {
     }
 }
 /// Implements all the traits required to be a complete HCI Stream.
-pub trait HCIStreamable: HCIWriter + HCIReader + HCIFilterable {}
-impl<T: HCIWriter + HCIReader + HCIFilterable> HCIStreamable for T {}
+pub trait HCIStreamable: HCIWriter + HCIReader + HCIFilterable + Send {}
+impl<T: HCIWriter + HCIReader + HCIFilterable + Send> HCIStreamable for T {}
 
 pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>> {
     stream: &'a mut Stream<S>,

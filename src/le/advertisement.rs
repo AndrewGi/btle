@@ -1,8 +1,7 @@
 //! BLE Advertisements. Provides processing of Advertisement Structs.
-use crate::RSSI;
+
 use core::convert::TryFrom;
 use core::mem;
-
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub struct AdStructureError(());
 
@@ -112,6 +111,7 @@ impl TryFrom<u8> for AdType {
         }
     }
 }
+/// WIP Advertisement Structure Enum
 pub enum AdStructure {
     MeshPDU(AdStructureDataBuffer),
     MeshBeacon(AdStructureDataBuffer),
@@ -202,7 +202,6 @@ pub const MAX_ADV_LEN: usize = 31;
 pub struct RawAdvertisement {
     buf: [u8; MAX_ADV_LEN],
     len: usize,
-    rssi: Option<RSSI>,
 }
 impl RawAdvertisement {
     /// Inserts a `AdStructure` into a `RawAdvertisement`
@@ -238,27 +237,13 @@ impl RawAdvertisement {
             data: self.as_ref(),
         }
     }
-    pub fn rssi(&self) -> Option<RSSI> {
-        self.rssi
-    }
 }
 impl AsRef<[u8]> for RawAdvertisement {
     fn as_ref(&self) -> &[u8] {
         &self.buf[..self.len]
     }
 }
-pub struct IncomingAdvertisement {
-    adv: RawAdvertisement,
-    rssi: Option<RSSI>,
-}
-impl IncomingAdvertisement {
-    pub fn adv(&self) -> &RawAdvertisement {
-        &self.adv
-    }
-    pub fn rssi(&self) -> Option<RSSI> {
-        self.rssi
-    }
-}
+
 pub struct OutgoingAdvertisement {
     adv: RawAdvertisement,
 }
@@ -286,9 +271,8 @@ impl<'a> Iterator for AdStructureIterator<'a> {
 }
 #[cfg(test)]
 mod tests {
-    use crate::advertisement::AdType;
+    use super::AdType;
     use core::convert::TryFrom;
-
     #[test]
     fn test_ad_type_try_into() {
         for i in 0u8..=255u8 {

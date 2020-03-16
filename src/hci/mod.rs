@@ -1,17 +1,38 @@
 //! HCI Layer (where most the magic happens). Implements a Bluetooth Adapter for any controller
 //! supporting HCI streams.
 //! (HCI Layer is Little Endian).
+
+#[cfg(feature = "hci")]
 pub mod adapters;
+#[cfg(feature = "hci")]
 pub mod command;
+#[cfg(feature = "hci")]
 pub mod event;
+#[cfg(feature = "hci")]
 pub mod le;
+#[cfg(feature = "hci")]
 pub mod link_control;
+#[cfg(feature = "hci")]
 pub mod packet;
-#[cfg(all(feature = "remote"))]
+#[cfg(all(feature = "remote", feature = "hci"))]
 pub mod remote;
-#[cfg(all(unix, feature = "bluez"))]
+#[cfg(all(unix, feature = "bluez", feature = "hci"))]
 pub mod socket;
+#[cfg(feature = "hci")]
 pub mod stream;
+
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
+pub enum StreamError {
+    CommandError(PackError),
+    UnsupportedPacketType(u8),
+    BadOpcode,
+    BadEventCode,
+    BadPacketCode,
+    StreamClosed,
+    StreamFailed,
+    IOError,
+}
+
 use crate::bytes::ToFromBytesEndian;
 use crate::{ConversionError, PackError};
 use core::convert::{TryFrom, TryInto};
