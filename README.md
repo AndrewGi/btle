@@ -1,4 +1,7 @@
 # btle - Rust Bluetooth Low Energy Driver
+[![crates.io](https://img.shields.io/crates/v/btle)](https://crates.io/crates/btle)
+[![docs.rs](https://docs.rs/btle/badge.svg)](https://docs.rs/btle)
+
 Cross-platform Bluetooth Low Energy library for Rust. Supports Central, Peripheral, Broadcaster and Observer GAP roles. Also supports custom device drivers to enable platform support for custom platforms (embedded, etc).
 
 Very much WIP.
