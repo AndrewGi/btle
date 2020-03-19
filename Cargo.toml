@@ -1,7 +1,7 @@
 [package]
 name = "btle"
 description = "Lightweight Bluetooth Low Energy Drivers. WIP and very not stable yet!! Designed for https://github.com/AndrewGi/BluetoothMeshRust"
-version = "0.1.2"
+version = "0.1.3"
 license = "GPL-3.0-only"
 readme = "README.md"
 authors = ["AndrewGi <andrew@gilbrough.com>"]
@@ -15,14 +15,13 @@ bluez = ["nix", "libc", "std", "hci", "tokio/uds"]
 hci = []
 asyncs = []
 tokio_asyncs = ["asyncs", "tokio/time", "tokio/sync", "tokio/rt-core"]
-std = ["futures-core/std", "futures-io/std", "futures-util/alloc", "futures-task/std"]
+std = ["futures-core/std", "futures-io/std", "futures-task/std"]
 remote = ["std", "hci"]
 
 [dependencies]
 futures-core = {version = "0.3.4", default_features = false, features=["alloc"]}
 futures-sink = {version = "0.3.4", default_features = false}
 futures-io = {version = "0.3.4", default_features = false, optional = true}
-futures-util = {version = "0.3.4", default_features = false}
 futures-task = {version = "0.3.4", default_features = false, optional = true}
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2.66", optional = true}

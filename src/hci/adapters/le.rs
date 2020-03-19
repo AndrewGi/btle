@@ -1,16 +1,23 @@
-use crate::bytes::Storage;
-use crate::hci::event::{Event, EventPacket, StaticEventBuffer};
-use crate::hci::le;
-use crate::hci::le::random::RAND_LEN;
-use crate::hci::le::report::StaticAdvBuffer;
-use crate::hci::packet::RawPacket;
-use crate::hci::stream::HCIStreamable;
-use crate::hci::{adapters, stream};
-use crate::le::adapter;
-use crate::le::advertisement::MAX_ADV_LEN;
-use crate::le::report::ReportInfo;
-use crate::le::scan::{Observer, ScanParameters};
-use crate::{BoxFuture, BoxStream};
+use crate::{
+    bytes::Storage,
+    hci::{
+        adapters,
+        event::{Event, EventPacket, StaticEventBuffer},
+        le,
+        le::random::RAND_LEN,
+        packet::RawPacket,
+        stream::HCIStreamable,
+        StreamError,
+    },
+    le::{
+        adapter,
+        advertisement::MAX_ADV_LEN,
+        report::ReportInfo,
+        report::StaticAdvBuffer,
+        scan::{Observer, ScanParameters},
+    },
+    BoxFuture, BoxStream,
+};
 use core::convert::TryFrom;
 use core::future::Future;
 use core::pin::Pin;
@@ -124,7 +131,7 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     /// Create an BLE Advertisement Stream that returns
     /// `le::report::ReportInfo<le::report::StaticAdvBuffer>>`. Make sure you set scan parameters
     /// and a `Filter` before calling this.
-    pub fn advertisement_stream<'b, Buf: Storage<ReportInfo<le::report::StaticAdvBuffer>>>(
+    pub fn advertisement_stream<'b, Buf: Storage<ReportInfo<StaticAdvBuffer>>>(
         &'b mut self,
     ) -> AdvertisementStream<'b, 'a, S, Buf> {
         AdvertisementStream::new(self)
@@ -206,7 +213,7 @@ impl<
             Ok(Ok(reports)) => reports,
             Ok(Err(e)) | Err(e) => {
                 return Poll::Ready(Some(Err(adapter::Error::StreamError(
-                    stream::Error::CommandError(e),
+                    StreamError::CommandError(e),
                 ))))
             }
         };

@@ -1,18 +1,24 @@
 //! Contains logic for HCI Adapters (usually byte streams).
 pub mod le;
-use crate::bytes::Storage;
-use crate::hci::command::Command;
-use crate::hci::event::CommandComplete;
-use crate::hci::packet::RawPacket;
-use crate::hci::stream::{HCIStreamable, Stream};
-use crate::hci::{stream, ErrorCode};
-use crate::le::adapter::Error;
-use crate::{error, hci};
+
+use crate::{
+    bytes::Storage,
+    error,
+    hci::{
+        self,
+        command::Command,
+        event::CommandComplete,
+        packet::RawPacket,
+        stream::{HCIStreamable, Stream},
+        ErrorCode, StreamError,
+    },
+    le::adapter::Error,
+};
 use core::fmt::Formatter;
 use core::pin::Pin;
 
-impl From<stream::Error> for Error {
-    fn from(e: stream::Error) -> Self {
+impl From<StreamError> for Error {
+    fn from(e: StreamError) -> Self {
         Error::StreamError(e)
     }
 }

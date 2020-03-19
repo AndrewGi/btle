@@ -1,5 +1,5 @@
 //! LE [`AdvertisingReport`] and [`ReportInfo`] types.
-use crate::bytes::{StaticBuf, Storage};
+use crate::bytes::Storage;
 use crate::hci::le::{MetaEvent, MetaEventCode};
 use crate::le::advertisement::MAX_ADV_LEN;
 use crate::le::report::{AddressType, EventType, NumReports, ReportInfo, StaticAdvBuffer};
@@ -8,7 +8,7 @@ use core::convert::TryFrom;
 
 pub struct AdvertisingReport<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]> = StaticAdvBuffer> {
     pub reports: T,
-    pub _marker: core::marker::PhantomData<B>,
+    _marker: core::marker::PhantomData<B>,
 }
 impl<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]>> AdvertisingReport<T, B> {
     pub const SUBEVENT_CODE: MetaEventCode = MetaEventCode::AdvertisingReport;
