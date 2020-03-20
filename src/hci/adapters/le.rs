@@ -1,3 +1,5 @@
+use crate::le::adapter::Error;
+use crate::le::advertiser::{Advertiser, AdvertisingParameters};
 use crate::{
     bytes::Storage,
     hci::{
@@ -36,19 +38,6 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     pub fn adapter_ref(&self) -> Pin<&adapters::Adapter<S>> {
         self.adapter.as_ref()
     }
-    /// Set advertising data (0-31 bytes).
-    pub async fn set_advertising_data(&mut self, data: &[u8]) -> Result<(), adapter::Error> {
-        if data.len() > MAX_ADV_LEN {
-            return Err(adapter::Error::BadParameter);
-        }
-        self.adapter_mut()
-            .send_command(le::commands::SetAdvertisingData::new(data))
-            .await?
-            .params
-            .status
-            .error()?;
-        Ok(())
-    }
     /// Read the advertising channel TX power in dBm. See [`le::advertise::TxPowerLevel`] for more.
     pub async fn get_advertising_tx_power(
         &mut self,
@@ -62,7 +51,7 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     }
     /// Set advertisement scanning enable/disable. [`LEAdapter::set_scan_parameters`] should be
     /// called first to set any scanning parameters (how long, what type of advertisements, etc).
-    pub async fn set_scan_enabled(
+    pub async fn set_scan_enable(
         &mut self,
         is_enabled: bool,
         filter_duplicates: bool,
@@ -94,10 +83,7 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     /// Enable or disable advertising. Make sure to set advertising parameters
     /// ([`LEAdapter::set_advertising_parameters`]) and advertising data
     /// ([`LEAdapter::set_advertising_data`]) before calling this function.
-    pub async fn set_advertising_enabled(
-        &mut self,
-        is_enabled: bool,
-    ) -> Result<(), adapter::Error> {
+    pub async fn set_advertising_enable(&mut self, is_enabled: bool) -> Result<(), adapter::Error> {
         self.adapter_mut()
             .send_command(le::commands::SetAdvertisingEnable { is_enabled })
             .await?
@@ -109,10 +95,10 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
     /// Set advertising parameters. See [`le::commands::SetAdvertisingParameters`] for more.
     pub async fn set_advertising_parameters(
         &mut self,
-        parameters: le::commands::SetAdvertisingParameters,
+        parameters: AdvertisingParameters,
     ) -> Result<(), adapter::Error> {
         self.adapter_mut()
-            .send_command(parameters)
+            .send_command(le::commands::SetAdvertisingParameters(parameters))
             .await?
             .params
             .status
@@ -127,6 +113,21 @@ impl<'a, S: HCIStreamable> LEAdapter<'a, S> {
             .await?;
         r.params.status.error()?;
         Ok(r.params.random_bytes)
+    }
+    /// Set advertising data (0-31 bytes).
+    /// # Errors
+    /// Returns `adapter::Error::BadParameter` if `data.len() > MAX_ADV_LEN` (31).
+    pub async fn set_advertising_data(&mut self, data: &[u8]) -> Result<(), adapter::Error> {
+        if data.len() > MAX_ADV_LEN {
+            return Err(adapter::Error::BadParameter);
+        }
+        self.adapter_mut()
+            .send_command(le::commands::SetAdvertisingData::new(data))
+            .await?
+            .params
+            .status
+            .error()?;
+        Ok(())
     }
     /// Create an BLE Advertisement Stream that returns
     /// `le::report::ReportInfo<le::report::StaticAdvBuffer>>`. Make sure you set scan parameters
@@ -235,7 +236,7 @@ impl<'a, S: HCIStreamable> Observer for LEAdapter<'a, S> {
         is_enabled: bool,
         filter_duplicates: bool,
     ) -> BoxFuture<Result<(), adapter::Error>> {
-        Box::pin(LEAdapter::set_scan_enabled(
+        Box::pin(LEAdapter::set_scan_enable(
             self,
             is_enabled,
             filter_duplicates,
@@ -244,5 +245,28 @@ impl<'a, S: HCIStreamable> Observer for LEAdapter<'a, S> {
 
     fn advertisement_stream(&mut self) -> BoxStream<Result<ReportInfo, adapter::Error>> {
         Box::pin(LEAdapter::advertisement_stream::<Box<[ReportInfo]>>(self))
+    }
+}
+
+impl<'a, S: HCIStreamable> Advertiser for LEAdapter<'a, S> {
+    fn set_advertising_enable(&mut self, is_enabled: bool) -> BoxFuture<Result<(), Error>> {
+        Box::pin(LEAdapter::set_advertising_enable(self, is_enabled))
+    }
+
+    fn set_advertising_parameters(
+        &mut self,
+        advertisement_parameters: AdvertisingParameters,
+    ) -> BoxFuture<Result<(), Error>> {
+        Box::pin(LEAdapter::set_advertising_parameters(
+            self,
+            advertisement_parameters,
+        ))
+    }
+
+    fn set_advertising_data<'s, 'b: 's>(
+        &'b mut self,
+        data: &'s [u8],
+    ) -> BoxFuture<'s, Result<(), Error>> {
+        Box::pin(LEAdapter::set_advertising_data(self, data))
     }
 }

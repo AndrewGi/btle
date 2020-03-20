@@ -37,7 +37,7 @@ pub async fn dump_adapter<S: btle::hci::stream::HCIStreamable>(
     le.set_scan_parameters(le::commands::SetScanParameters::DEFAULT)
         .await?;
     // Enable scanning for advertisement packets.
-    le.set_scan_enabled(true, false).await?;
+    le.set_scan_enable(true, false).await?;
 
     // Set the HCI filter to only allow LEMeta events.
     let mut filter = btle::hci::stream::Filter::default();

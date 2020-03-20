@@ -12,6 +12,7 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 [features]
 default = ["hci",  "std", "tokio_asyncs"]
 bluez = ["nix", "libc", "std", "hci", "tokio/uds"]
+windows = ["winrt"]
 hci = []
 asyncs = []
 tokio_asyncs = ["asyncs", "tokio/time", "tokio/sync", "tokio/rt-core"]
@@ -19,6 +20,7 @@ std = ["futures-io/std"]
 remote = ["std", "hci"]
 
 [dependencies]
+winrt = {version = "0.6.0", default_features = false, features = ["windows-devices"], optional = true}
 futures-core = {version = "0.3.4", default_features = false, features=["alloc"]}
 futures-sink = {version = "0.3.4", default_features = false}
 futures-io = {version = "0.3.4", optional = true}
@@ -28,4 +30,4 @@ tokio = {version = "0.2.13", optional = true, default_features = false}
 
 [[example]]
 name = "advertisement_dump"
-required-features = ["std", "bluez"]
+required-features = ["bluez"]

@@ -12,6 +12,7 @@
     clippy::type_complexity,
     clippy::doc_markdown
 )]
+#![deny(unconditional_recursion)]
 #![allow(dead_code)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
