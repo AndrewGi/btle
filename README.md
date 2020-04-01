@@ -34,8 +34,7 @@ pub async fn dump_adapter<S: btle::hci::stream::HCIStreamable>(
     let mut adapter = Pin::new(&mut adapter);
     let mut le = adapter.as_mut().le();
     // Set BLE Scan parameters (when to scan, how long, etc)
-    le.set_scan_parameters(le::commands::SetScanParameters::DEFAULT)
-        .await?;
+    le.set_scan_parameters(le::commands::SetScanParameters::DEFAULT).await?;
     // Enable scanning for advertisement packets.
     le.set_scan_enable(true, false).await?;
 
