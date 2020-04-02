@@ -2,6 +2,7 @@ use crate::bytes::{Storage, ToFromBytesEndian};
 use crate::le::advertisement::{AdStructureType, AdType, UnpackableAdStructType};
 use crate::{CompanyID, PackError};
 
+#[derive(Copy, Clone, Debug)]
 pub struct ManufacturerSpecificData<Buf> {
     pub company_id: CompanyID,
     pub data: Buf,
