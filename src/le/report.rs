@@ -1,5 +1,4 @@
-use crate::bytes::StaticBuf;
-use crate::le::advertisement::MAX_ADV_LEN;
+use crate::le::advertisement::{RawAdvertisement, StaticAdvBuffer};
 use crate::{BTAddress, ConversionError, BT_ADDRESS_LEN, RSSI};
 use core::convert::TryFrom;
 use core::fmt::Formatter;
@@ -109,7 +108,6 @@ impl From<AddressType> for u8 {
         a as u8
     }
 }
-pub type StaticAdvBuffer = StaticBuf<u8, [u8; MAX_ADV_LEN]>;
 /// BLE Advertising report from scanning for advertisements that contains advertisement type [`EventType`],
 /// address type [`AddressType`], bluetooth address [`BTAddress`], data (0-31 bytes) and
 /// maybe (`Option`) RSSI [`RSSI`].
@@ -125,7 +123,7 @@ pub struct ReportInfo<T = StaticAdvBuffer> {
     /// Bluetooth Address associated with the Advertisement.
     pub address: BTAddress,
     /// Advertisement data (0-31 bytes).
-    pub data: T,
+    pub data: RawAdvertisement<T>,
     /// RSSI (-127dBm to +20dBm) or `None` if RSSI readings are unsupported by the adapter.
     pub rssi: Option<RSSI>,
 }
@@ -158,7 +156,7 @@ impl<T: AsRef<[u8]> + Default> Default for ReportInfo<T> {
             event_type: EventType::AdvInd,
             address_type: AddressType::PublicDevice,
             address: BTAddress::ZEROED,
-            data: T::default(),
+            data: RawAdvertisement(T::default()),
             rssi: None,
         }
     }

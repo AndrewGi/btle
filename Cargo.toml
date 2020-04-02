@@ -12,22 +12,27 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 [features]
 default = ["hci",  "std", "tokio_asyncs"]
 bluez = ["nix", "libc", "std", "hci", "tokio/uds"]
-windows = ["winrt"]
+windows_drivers = ["winrt", "std"]
 hci = []
 asyncs = []
 tokio_asyncs = ["asyncs", "tokio/time", "tokio/sync", "tokio/rt-core"]
+async-std_asyncs = ["asyncs", "std", "async-std/std"]
 std = ["futures-io/std"]
 remote = ["std", "hci"]
 
 [dependencies]
-winrt = {version = "0.6.0", default_features = false, features = ["windows-devices"], optional = true}
+winrt = {version = "0.6.0", default_features = false, features = ["windows-devices", "windows-storage"], optional = true}
 futures-core = {version = "0.3.4", default_features = false, features=["alloc"]}
 futures-sink = {version = "0.3.4", default_features = false}
 futures-io = {version = "0.3.4", optional = true}
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2.66", optional = true}
 tokio = {version = "0.2.13", optional = true, default_features = false}
-
+async-std = {version = "1.5.0", optional =true, default_features = false}
 [[example]]
 name = "advertisement_dump"
 required-features = ["bluez"]
+
+[[example]]
+name = "windows_test"
+required-features = ["windows_drivers"]

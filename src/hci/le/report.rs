@@ -1,8 +1,8 @@
 //! LE [`AdvertisingReport`] and [`ReportInfo`] types.
 use crate::bytes::Storage;
 use crate::hci::le::{MetaEvent, MetaEventCode};
-use crate::le::advertisement::MAX_ADV_LEN;
-use crate::le::report::{AddressType, EventType, NumReports, ReportInfo, StaticAdvBuffer};
+use crate::le::advertisement::{RawAdvertisement, StaticAdvBuffer, MAX_ADV_LEN};
+use crate::le::report::{AddressType, EventType, NumReports, ReportInfo};
 use crate::{BTAddress, PackError, BT_ADDRESS_LEN, RSSI};
 use core::convert::TryFrom;
 
@@ -82,7 +82,7 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
                 event_type,
                 address_type,
                 address,
-                data: B::from_slice(data),
+                data: RawAdvertisement(B::from_slice(data)),
                 rssi: None,
             };
             total_data_len += usize::from(data_len);

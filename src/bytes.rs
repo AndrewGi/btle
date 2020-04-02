@@ -213,7 +213,11 @@ impl<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> StaticBuf<T, A
     pub fn max_size() -> usize {
         ArrayBuf::default().as_ref().len()
     }
-
+    /// Returns the space left in `T`s (not bytes) in the `StaticBuf`.
+    /// Simply (`capacity - length`).
+    pub fn space_left(&self) -> usize {
+        self.buf.as_ref().len() - self.len
+    }
     /// Resizes the `StaticBuf` by settings `self.len` to `new_size` if `new_size <= Self::max_size()`.
     /// This is only a single variable change and WILL NOT zero or change any of the buffers bytes.
     /// # Examples
@@ -300,6 +304,10 @@ pub trait Storage<T: Copy + Default>: AsRef<[T]> + AsMut<[T]> + Unpin {
         out.as_mut().copy_from_slice(buf);
         out
     }
+    fn max_len() -> usize;
+    fn space_left(&self) -> usize {
+        Self::max_len() - self.len()
+    }
     fn len(&self) -> usize {
         self.as_ref().len()
     }
@@ -320,6 +328,9 @@ impl<T: Copy + Unpin + Default> Storage<T> for Vec<T> {
     fn len(&self) -> usize {
         <Vec<T>>::len(self)
     }
+    fn max_len() -> usize {
+        usize::max_value()
+    }
 }
 impl<T: Copy + Unpin + Default> Storage<T> for Box<[T]> {
     fn with_size(size: usize) -> Self
@@ -333,6 +344,10 @@ impl<T: Copy + Unpin + Default> Storage<T> for Box<[T]> {
         Self: Sized,
     {
         buf.into()
+    }
+
+    fn max_len() -> usize {
+        usize::max_value()
     }
 }
 
@@ -354,6 +369,9 @@ impl<T: Copy + Unpin + Default, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Co
             len: size,
             _marker: core::marker::PhantomData,
         }
+    }
+    fn max_len() -> usize {
+        Self::max_size()
     }
     fn len(&self) -> usize {
         self.len

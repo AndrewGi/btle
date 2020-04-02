@@ -1,4 +1,5 @@
 use crate::le::adapter::Error;
+use crate::le::advertisement::StaticAdvBuffer;
 use crate::le::advertiser::{Advertiser, AdvertisingParameters};
 use crate::{
     bytes::Storage,
@@ -15,7 +16,6 @@ use crate::{
         adapter,
         advertisement::MAX_ADV_LEN,
         report::ReportInfo,
-        report::StaticAdvBuffer,
         scan::{Observer, ScanParameters},
     },
     BoxFuture, BoxStream,

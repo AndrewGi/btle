@@ -34,6 +34,8 @@ pub mod error;
 pub mod hci;
 pub mod le;
 pub mod uri;
+#[cfg(feature = "windows_drivers")]
+pub mod windows;
 /// Basic `ConversionError` for when primitives can't be converted to/from bytes because of invalid
 /// states. Most modules use their own errors for when there is more information to report.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]

@@ -1,4 +1,7 @@
 use crate::asyncs::sync::mpsc::mpsc_impl::{ReceiverImpl, SenderImpl};
+use core::task::{Context, Poll};
+use futures_core::Stream;
+use tokio::macros::support::Pin;
 
 #[derive(Copy, Clone)]
 pub struct TryRecvError(());
@@ -10,7 +13,7 @@ pub struct SendError<T>(pub T);
 #[cfg(feature = "tokio_asyncs")]
 pub mod mpsc_impl {
     use crate::asyncs::sync::mpsc::{SendError, TryRecvError, TrySendError};
-
+    use core::task::{Context, Poll};
     pub struct ReceiverImpl<T>(tokio::sync::mpsc::Receiver<T>);
     impl<T> ReceiverImpl<T> {
         pub async fn recv(&mut self) -> Option<T> {
@@ -21,6 +24,9 @@ pub mod mpsc_impl {
         }
         pub fn close(&mut self) {
             self.0.close();
+        }
+        pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+            self.0.poll_recv(cx)
         }
     }
     impl<T> From<tokio::sync::mpsc::Receiver<T>> for ReceiverImpl<T> {
@@ -68,10 +74,21 @@ impl<T> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
         self.0.recv().await
     }
+    pub fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
+        self.0.poll_recv(cx)
+    }
     pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
         self.0.try_recv()
     }
 }
+impl<T> Stream for Receiver<T> {
+    type Item = T;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.poll_recv(cx)
+    }
+}
+
 pub struct Sender<T>(SenderImpl<T>);
 
 impl<T> Clone for Sender<T> {

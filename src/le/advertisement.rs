@@ -1,7 +1,10 @@
 //! BLE Advertisements. Provides processing of Advertisement Structs.
 
+use crate::bytes::{StaticBuf, Storage};
+use crate::PackError;
 use core::convert::TryFrom;
 use core::mem;
+
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub struct AdStructureError(());
 
@@ -111,149 +114,104 @@ impl TryFrom<u8> for AdType {
         }
     }
 }
-/// WIP Advertisement Structure Enum
-pub enum AdStructure {
-    MeshPDU(AdStructureDataBuffer),
-    MeshBeacon(AdStructureDataBuffer),
-    MeshProvision(AdStructureDataBuffer),
-    Unknown(AdType, AdStructureDataBuffer),
+pub trait AdStructureType {
+    fn ad_type(&self) -> AdType;
+    fn byte_len(&self) -> usize;
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
 }
-impl AdStructure {
-    /// # Panics
-    /// Panics if `data` won'f fit in `AdStructureDataBuffer` (look at `AdStructureDataBuffer::new`).
-    pub fn new(ad_type: AdType, data: &[u8]) -> AdStructure {
-        match ad_type {
-            _ => AdStructure::Unknown(ad_type, AdStructureDataBuffer::new(data)),
+pub trait UnpackableAdStructType: AdStructureType {
+    fn unpack_from(ad_type: AdType, buf: &[u8]) -> Result<Self, PackError>
+    where
+        Self: Sized;
+}
+pub const MAX_AD_LEN: usize = 30;
+pub type StaticAdvBuffer = StaticBuf<u8, [u8; MAX_ADV_LEN]>;
+pub type StaticAdvStructBuf = StaticBuf<u8, [u8; MAX_AD_LEN]>;
+pub struct RawAdStructureBuffer<StructBuf = StaticAdvStructBuf> {
+    pub ad_type: AdType,
+    pub buf: StructBuf,
+}
+impl<StructBuf> RawAdStructureBuffer<StructBuf> {
+    pub fn new(ad_type: AdType, buf: StructBuf) -> Self {
+        Self { ad_type, buf }
+    }
+}
+impl<StructBuf: AsRef<[u8]>> AdStructureType for RawAdStructureBuffer<StructBuf> {
+    fn ad_type(&self) -> AdType {
+        self.ad_type
+    }
+
+    fn byte_len(&self) -> usize {
+        self.buf.as_ref().len()
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(self.buf.as_ref().len(), buf)?;
+        buf.copy_from_slice(self.buf.as_ref());
+        Ok(())
+    }
+}
+impl<StructBuf: Storage<u8>> UnpackableAdStructType for RawAdStructureBuffer<StructBuf> {
+    fn unpack_from(ad_type: AdType, buf: &[u8]) -> Result<Self, PackError> {
+        if buf.len() > MAX_AD_LEN {
+            PackError::expect_length(MAX_AD_LEN, buf)?;
         }
-    }
-    pub fn data(&self) -> &[u8] {
-        match self {
-            AdStructure::MeshPDU(b)
-            | AdStructure::MeshBeacon(b)
-            | AdStructure::MeshProvision(b)
-            | AdStructure::Unknown(_, b) => b.as_ref(),
-        }
-    }
-    pub fn ad_type(&self) -> AdType {
-        match self {
-            AdStructure::MeshPDU(_) => AdType::MeshPDU,
-            AdStructure::MeshBeacon(_) => AdType::MeshBeacon,
-            AdStructure::MeshProvision(_) => AdType::PbAdv,
-            AdStructure::Unknown(t, _) => *t,
-        }
-    }
-    pub fn len(&self) -> usize {
-        // +2 for the ad_type and len u8's
-        match self {
-            AdStructure::MeshPDU(b)
-            | AdStructure::MeshBeacon(b)
-            | AdStructure::MeshProvision(b)
-            | AdStructure::Unknown(_, b) => b.len() + 2,
-        }
-    }
-}
-impl From<&AdStructure> for RawAdvertisement {
-    fn from(s: &AdStructure) -> Self {
-        let mut out = RawAdvertisement::default();
-        out.insert(s);
-        out
-    }
-}
-const MAX_AD_LEN: usize = 30;
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug, Hash, Default)]
-pub struct AdStructureDataBuffer {
-    data: [u8; MAX_AD_LEN],
-    len: usize,
-}
-impl AdStructureDataBuffer {
-    /// # Panics
-    /// Panics if `data.len() > MAX_AD_LEN` (if data won't fit in the buffer).
-    pub fn new(data: &[u8]) -> AdStructureDataBuffer {
-        assert!(data.len() < MAX_AD_LEN);
-        let mut out = AdStructureDataBuffer::default();
-        out.data[..data.len()].copy_from_slice(data);
-        out.len = data.len();
-        out
-    }
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-    pub fn len(&self) -> usize {
-        self.len
-    }
-}
-pub struct RawAdStructureBuffer {
-    ad_type: AdType,
-    data: [u8; MAX_AD_LEN],
-    len: usize,
-}
-impl AsRef<[u8]> for AdStructureDataBuffer {
-    fn as_ref(&self) -> &[u8] {
-        &self.data[..self.len]
-    }
-}
-impl RawAdStructureBuffer {
-    pub fn data(&self) -> &[u8] {
-        &self.data[..self.len]
+        Ok(Self::new(ad_type, StructBuf::from_slice(buf)))
     }
 }
 pub const MAX_ADV_LEN: usize = 31;
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Default, Hash, Debug)]
-pub struct RawAdvertisement {
-    buf: [u8; MAX_ADV_LEN],
-    len: usize,
-}
-impl RawAdvertisement {
+pub struct RawAdvertisement<Buf = StaticAdvBuffer>(pub Buf);
+impl RawAdvertisement<StaticAdvBuffer> {
     /// Inserts a `AdStructure` into a `RawAdvertisement`
-    /// # Panics
-    /// Panics if there isn't enough room for the `ad_struct`
-    pub fn insert(&mut self, ad_struct: &AdStructure) {
-        assert!(
-            self.space_left() >= ad_struct.len(),
-            "no room for ad_struct"
-        );
-        self.insert_u8(ad_struct.ad_type().into());
-        let len = ad_struct.len();
-        self.insert_u8(u8::try_from(len).expect("AdStructures are always < MAX_ADV_LEN"));
-        self.buf[self.len..self.len + len].copy_from_slice(ad_struct.data());
-        self.len += len;
+    pub fn insert<AdStruct: AdStructureType>(
+        &mut self,
+        ad_struct: &AdStruct,
+    ) -> Result<(), PackError> {
+        let current_len = self.0.len();
+        let ad_struct_len = ad_struct.byte_len();
+        // ad_struct_len + 1 (for AdType) + 1 (for byte len as u8)
+        let total_struct_len = ad_struct_len + 1 + 1;
+        if self.0.space_left() < total_struct_len {
+            return Err(PackError::BadLength {
+                expected: total_struct_len + current_len,
+                got: StaticAdvBuffer::max_size(),
+            });
+        }
+        self.0.resize(current_len + total_struct_len);
+        let len = ad_struct.byte_len();
+        // The AdStruct byte len should always be less than MAX_AD_LEN (30) and so it should always
+        // be able to fit in a u8. If the usize -> u8 conversion fails, then theres something really
+        // wrong with the ad structure.
+        let len_u8 = u8::try_from(len).map_err(|_| PackError::InvalidFields)?;
+        ad_struct.pack_into(&mut self.0.as_mut()[current_len + 2..])?;
+        self.0.as_mut()[current_len] = ad_struct.ad_type().into();
+        self.0.as_mut()[current_len + 1] = len_u8;
+        Ok(())
     }
-    fn insert_u8(&mut self, v: u8) {
-        assert!(self.len < MAX_ADV_LEN);
-        self.buf[self.len] = v;
-        self.len += 1;
-    }
-    pub const fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-    pub const fn len(&self) -> usize {
-        self.len
-    }
-    pub fn space_left(&self) -> usize {
-        MAX_ADV_LEN - self.len
-    }
+}
+impl<Buf: AsRef<[u8]>> RawAdvertisement<Buf> {
     pub fn iter(&self) -> AdStructureIterator<'_> {
         AdStructureIterator {
             data: self.as_ref(),
         }
     }
 }
-impl AsRef<[u8]> for RawAdvertisement {
+impl<Buf: AsRef<[u8]>> AsRef<[u8]> for RawAdvertisement<Buf> {
     fn as_ref(&self) -> &[u8] {
-        &self.buf[..self.len]
+        self.0.as_ref()
     }
 }
 
 pub struct OutgoingAdvertisement {
     adv: RawAdvertisement,
 }
-pub struct AdvertisementData {}
 pub struct AdStructureIterator<'a> {
     data: &'a [u8],
 }
 
 impl<'a> Iterator for AdStructureIterator<'a> {
-    type Item = AdStructure;
+    type Item = RawAdStructureBuffer;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.data.len() < 2 {
@@ -266,7 +224,10 @@ impl<'a> Iterator for AdStructureIterator<'a> {
         let ad_type = AdType::try_from(data[1]).ok()?;
         // Drop the len and ad_type from the front of the ad structure.
         let data = &data[2..];
-        Some(AdStructure::new(ad_type, data))
+        Some(RawAdStructureBuffer::new(
+            ad_type,
+            StaticAdvStructBuf::from_slice(data),
+        ))
     }
 }
 #[cfg(test)]
