@@ -14,6 +14,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     let mut watcher = windows::ble::observer::Watcher::new().map_err(StdError)?;
     let mut stream = watcher.advertisement_stream().map_err(StdError)?;
     println!("waiting for next advertisement");
-    println!("{:?}", stream.next().await);
-    Ok(())
+    loop {
+        println!("{:?}", stream.next().await);
+    }
 }
