@@ -18,7 +18,7 @@ pub fn ready<T>(t: T) -> Ready<T> {
 }
 
 pub trait FutureExt: Future {
-    fn map<T, Funct>(self, f: Funct) -> Map<Self, F>
+    fn map<U, Funct>(self, f: Funct) -> Map<Self, Funct>
     where
         Self: Sized,
         Funct: FnOnce(Self::Output) -> U,

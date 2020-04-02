@@ -124,6 +124,9 @@ pub trait UnpackableAdStructType: AdStructureType {
     where
         Self: Sized;
 }
+pub trait ConstAdStructType: UnpackableAdStructType {
+    const AD_TYPE: AdType;
+}
 pub const MAX_AD_LEN: usize = 30;
 pub type StaticAdvBuffer = StaticBuf<u8, [u8; MAX_ADV_LEN]>;
 pub type StaticAdvStructBuf = StaticBuf<u8, [u8; MAX_AD_LEN]>;
@@ -185,8 +188,8 @@ impl RawAdvertisement<StaticAdvBuffer> {
         // wrong with the ad structure.
         let len_u8 = u8::try_from(len).map_err(|_| PackError::InvalidFields)?;
         ad_struct.pack_into(&mut self.0.as_mut()[current_len + 2..])?;
-        self.0.as_mut()[current_len] = ad_struct.ad_type().into();
-        self.0.as_mut()[current_len + 1] = len_u8;
+        self.0.as_mut()[current_len] = len_u8;
+        self.0.as_mut()[current_len + 1] = ad_struct.ad_type().into();
         Ok(())
     }
 }

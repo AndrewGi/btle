@@ -1,26 +1,36 @@
-use crate::asyncs::future::ready;
-use crate::asyncs::sync::mpsc::TrySendError;
-use crate::bytes::Storage;
-use crate::error::IOError;
-use crate::le::adapter::Error;
-use crate::le::advertisement::{
-    AdType, RawAdStructureBuffer, RawAdvertisement, StaticAdvBuffer, StaticAdvStructBuf,
+use crate::le::scan;
+use crate::le::scan::ScanType;
+use crate::{
+    asyncs::{self, future::ready, stream::StreamExt, sync::mpsc::TrySendError},
+    bytes::Storage,
+    bytes::ToFromBytesEndian,
+    error::IOError,
+    le::adapter::Error,
+    le::advertisement::{
+        AdType, RawAdStructureBuffer, RawAdvertisement, StaticAdvBuffer, StaticAdvStructBuf,
+    },
+    le::report::{AddressType, EventType, ReportInfo},
+    le::scan::{Observer, ScanParameters},
+    BTAddress, BoxFuture, BoxStream, RSSI,
 };
-use crate::le::report::{AddressType, EventType, ReportInfo};
-use crate::le::scan::{Observer, ScanParameters};
-use crate::{asyncs, bytes::ToFromBytesEndian, BTAddress, BoxFuture, BoxStream, RSSI};
-use core::convert::{TryFrom, TryInto};
-use core::ops::Deref;
-use core::pin::Pin;
-use core::task::{Context, Poll};
+use core::{
+    convert::{TryFrom, TryInto},
+    ops::Deref,
+    pin::Pin,
+    task::{Context, Poll},
+};
 use futures_core::Stream;
-use winrt::windows::devices::bluetooth::advertisement::{
-    BluetoothLEAdvertisementDataSection, BluetoothLEAdvertisementFilter,
-    BluetoothLEAdvertisementReceivedEventArgs, BluetoothLEAdvertisementType,
-    BluetoothLEAdvertisementWatcher,
+use winrt::{
+    windows::{
+        devices::bluetooth::advertisement::{
+            BluetoothLEAdvertisementDataSection, BluetoothLEAdvertisementFilter,
+            BluetoothLEAdvertisementReceivedEventArgs, BluetoothLEAdvertisementType,
+            BluetoothLEAdvertisementWatcher, BluetoothLEScanningMode,
+        },
+        storage::streams::DataReader,
+    },
+    ComPtr, RtDefaultConstructible,
 };
-use winrt::windows::storage::streams::DataReader;
-use winrt::{ComPtr, RtDefaultConstructible};
 
 /// Wrapper around `winrt`'s `BluetoothLEAdvertisementWatcher`.
 pub struct Watcher {
@@ -117,6 +127,14 @@ impl Watcher {
         }
         Ok(())
     }
+    pub fn set_scanning_mode(&mut self, scanning_mode: scan::ScanType) -> Result<(), IOError> {
+        let mode = match scanning_mode {
+            ScanType::Passive => BluetoothLEScanningMode::Passive,
+            ScanType::Active => BluetoothLEScanningMode::Active,
+        };
+        self.watcher.set_scanning_mode(mode)?;
+        Ok(())
+    }
     pub fn advertisement_stream(&mut self) -> AdvertisementStream<'_> {
         AdvertisementStream::new(self)
     }
@@ -124,9 +142,12 @@ impl Watcher {
 impl Observer for Watcher {
     fn set_scan_parameters<'a>(
         &'a mut self,
-        _scan_parameters: ScanParameters,
+        scan_parameters: ScanParameters,
     ) -> BoxFuture<'a, Result<(), Error>> {
-        unimplemented!()
+        Box::pin(ready(
+            self.set_scanning_mode(scan_parameters.scan_type)
+                .map_err(Error::IOError),
+        ))
     }
 
     fn set_scan_enable<'a>(
@@ -142,7 +163,7 @@ impl Observer for Watcher {
     fn advertisement_stream<'a>(
         &'a mut self,
     ) -> BoxStream<'a, Result<ReportInfo<StaticAdvBuffer>, Error>> {
-        unimplemented!()
+        Box::pin(self.advertisement_stream().map(|r| Ok(r)))
     }
 }
 pub struct AdvertisementStream<'a>(&'a mut Watcher);

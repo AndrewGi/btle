@@ -220,6 +220,8 @@ impl<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> StaticBuf<T, A
     }
     /// Resizes the `StaticBuf` by settings `self.len` to `new_size` if `new_size <= Self::max_size()`.
     /// This is only a single variable change and WILL NOT zero or change any of the buffers bytes.
+    /// # Panics
+    /// Panics if the new size is greater than max_size (`new_size > Self::max_size()`).
     /// # Examples
     /// ```
     /// use btle::bytes::{StaticBuf, Storage};
@@ -240,6 +242,14 @@ impl<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> StaticBuf<T, A
             Self::max_size()
         );
         self.len = new_size;
+    }
+    /// Appends the slice onto the end of the `StaticBuf`.
+    /// # Panics
+    /// Panics if appending the slice would overflow the `StaticBuf` (not enough space).
+    pub fn append_slice(&mut self, slice: &[T]) {
+        let cur_len = self.len;
+        self.resize(cur_len + slice.len());
+        self.as_mut()[cur_len..].copy_from_slice(slice);
     }
 }
 impl<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> AsRef<[T]>

@@ -1,5 +1,7 @@
 use crate::bytes::{Storage, ToFromBytesEndian};
-use crate::le::advertisement::{AdStructureType, AdType, UnpackableAdStructType};
+use crate::le::advertisement::{
+    AdStructureType, AdType, ConstAdStructType, UnpackableAdStructType,
+};
 use crate::{CompanyID, PackError};
 
 #[derive(Copy, Clone, Debug)]
@@ -43,12 +45,23 @@ impl<Buf: Storage<u8>> UnpackableAdStructType for ManufacturerSpecificData<Buf> 
                     got: buf.len(),
                 })
             } else {
-                Ok(Self::new(
-                    CompanyID::from_bytes_le(&buf[..CompanyID::byte_len()])
-                        .expect("company id length checked above"),
-                    Buf::from_slice(&buf[CompanyID::byte_len()..]),
-                ))
+                let max_len = Buf::max_len();
+                if buf.len() > max_len {
+                    Err(PackError::BadLength {
+                        expected: max_len,
+                        got: buf.len(),
+                    })
+                } else {
+                    Ok(Self::new(
+                        CompanyID::from_bytes_le(&buf[..CompanyID::byte_len()])
+                            .expect("company id length checked above"),
+                        Buf::from_slice(&buf[CompanyID::byte_len()..]),
+                    ))
+                }
             }
         }
     }
+}
+impl<Buf: Storage<u8>> ConstAdStructType for ManufacturerSpecificData<Buf> {
+    const AD_TYPE: AdType = AdType::ManufacturerData;
 }

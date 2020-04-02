@@ -13,6 +13,16 @@ pub trait StreamExt: Stream {
     {
         Next(self)
     }
+    fn map<U, Funct>(self, f: Funct) -> Map<Self, Funct>
+    where
+        Self: Sized,
+        Funct: FnMut(Self::Item) -> U,
+    {
+        Map {
+            stream: self,
+            function: f,
+        }
+    }
 }
 
 impl<S: Stream> StreamExt for S {}
