@@ -11,8 +11,7 @@ Supported Platforms so far:
 - [x] Linux (BlueZ)
 - [x] HCI
 - [ ] Proxy
-- [ ] Windows 10
-- [ ] UWP
+- [x] Windows 10 / UWP
 - [ ] Windows 7
 - [ ] macOS
 - [ ] iOS
