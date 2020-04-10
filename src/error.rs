@@ -52,6 +52,8 @@ pub enum IOError {
     IllegalCall,
     AlreadyExists,
     Refused,
+    Pipe,
+    Overflow,
     Other,
     Code(i32),
 }
@@ -80,6 +82,27 @@ impl From<winrt::Error> for IOError {
     }
 }
 
+#[cfg(feature = "rusb")]
+impl From<rusb::Error> for IOError {
+    fn from(e: rusb::Error) -> Self {
+        match e {
+            rusb::Error::Success => unreachable!("success passed as error type"),
+            rusb::Error::Io => IOError::Other,
+            rusb::Error::InvalidParam => IOError::InvalidArgument,
+            rusb::Error::Access => IOError::AccessDenied,
+            rusb::Error::NoDevice => IOError::NotConnected,
+            rusb::Error::NotFound => IOError::NotFound,
+            rusb::Error::Busy => IOError::Refused,
+            rusb::Error::Timeout => IOError::TimedOut,
+            rusb::Error::Overflow => IOError::Overflow,
+            rusb::Error::Pipe => IOError::Pipe,
+            rusb::Error::Interrupted => IOError::Interrupted,
+            rusb::Error::NoMem => IOError::OutOfMemory,
+            rusb::Error::NotSupported => IOError::NotImplemented,
+            rusb::Error::Other => IOError::Other,
+        }
+    }
+}
 #[cfg(feature = "std")]
 impl From<std::io::ErrorKind> for IOError {
     fn from(e: std::io::ErrorKind) -> Self {

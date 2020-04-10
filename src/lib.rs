@@ -16,27 +16,29 @@
 #![allow(dead_code)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+
 #[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
 /// Workaround for returning futures from async Traits.
 pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;
 /// Workaround for returning streams from async Traits.
 pub type BoxStream<'a, T> = futures_core::stream::BoxStream<'a, T>;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate std;
-
-use crate::bytes::ToFromBytesEndian;
-use core::convert::{TryFrom, TryInto};
 
 pub mod asyncs;
 pub mod bytes;
 pub mod error;
+#[cfg(feature = "hci")]
 pub mod hci;
 pub mod le;
 pub mod uri;
-#[cfg(feature = "windows_drivers")]
+#[cfg(feature = "winrt_drives")]
 pub mod windows;
+
+use core::convert::{TryFrom, TryInto};
+
 /// Basic `ConversionError` for when primitives can't be converted to/from bytes because of invalid
 /// states. Most modules use their own errors for when there is more information to report.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -141,42 +143,6 @@ impl MilliDBM {
         MilliDBM(milli_dbm)
     }
 }
-
-/// 16-bit Bluetooth Company Identifier. Companies are assigned unique Company Identifiers to
-/// Bluetooth SIG members requesting them. [See here for more](https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers/)
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Hash)]
-#[cfg_attr(feature = "serde-1", derive(serde::Serialize, serde::Deserialize))]
-pub struct CompanyID(pub u16);
-impl CompanyID {
-    /// Return the length in bytes of `CompanyID` (2-bytes, 16-bits)
-    pub const fn byte_len() -> usize {
-        2
-    }
-}
-impl ToFromBytesEndian for CompanyID {
-    type AsBytesType = [u8; 2];
-
-    #[must_use]
-    fn to_bytes_le(&self) -> Self::AsBytesType {
-        (self.0).to_bytes_le()
-    }
-
-    #[must_use]
-    fn to_bytes_be(&self) -> Self::AsBytesType {
-        (self.0).to_bytes_be()
-    }
-
-    #[must_use]
-    fn from_bytes_le(bytes: &[u8]) -> Option<Self> {
-        Some(CompanyID(u16::from_bytes_le(bytes)?))
-    }
-
-    #[must_use]
-    fn from_bytes_be(bytes: &[u8]) -> Option<Self> {
-        Some(CompanyID(u16::from_bytes_be(bytes)?))
-    }
-}
-
 /// Bluetooth address length (6 bytes)
 pub const BT_ADDRESS_LEN: usize = 6;
 
@@ -201,5 +167,39 @@ impl BTAddress {
         PackError::expect_length(BT_ADDRESS_LEN, bytes)?;
         bytes.copy_from_slice(&self.0[..]);
         Ok(())
+    }
+}
+/// 16-bit Bluetooth Company Identifier. Companies are assigned unique Company Identifiers to
+/// Bluetooth SIG members requesting them. [See here for more](https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers/)
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Hash)]
+#[cfg_attr(feature = "serde-1", derive(serde::Serialize, serde::Deserialize))]
+pub struct CompanyID(pub u16);
+impl CompanyID {
+    /// Return the length in bytes of `CompanyID` (2-bytes, 16-bits)
+    pub const fn byte_len() -> usize {
+        2
+    }
+}
+impl crate::bytes::ToFromBytesEndian for CompanyID {
+    type AsBytesType = [u8; 2];
+
+    #[must_use]
+    fn to_bytes_le(&self) -> Self::AsBytesType {
+        (self.0).to_bytes_le()
+    }
+
+    #[must_use]
+    fn to_bytes_be(&self) -> Self::AsBytesType {
+        (self.0).to_bytes_be()
+    }
+
+    #[must_use]
+    fn from_bytes_le(bytes: &[u8]) -> Option<Self> {
+        Some(CompanyID(u16::from_bytes_le(bytes)?))
+    }
+
+    #[must_use]
+    fn from_bytes_be(bytes: &[u8]) -> Option<Self> {
+        Some(CompanyID(u16::from_bytes_be(bytes)?))
     }
 }

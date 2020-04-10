@@ -2,24 +2,19 @@
 //! supporting HCI streams.
 //! (HCI Layer is Little Endian).
 
-#[cfg(feature = "hci")]
 pub mod adapters;
-#[cfg(feature = "hci")]
 pub mod command;
-#[cfg(feature = "hci")]
 pub mod event;
-#[cfg(feature = "hci")]
 pub mod le;
-#[cfg(feature = "hci")]
 pub mod link_control;
-#[cfg(feature = "hci")]
 pub mod packet;
-#[cfg(all(feature = "remote", feature = "hci"))]
+#[cfg(feature = "remote")]
 pub mod remote;
-#[cfg(all(unix, feature = "bluez", feature = "hci"))]
+#[cfg(all(unix, feature = "bluez"))]
 pub mod socket;
-#[cfg(feature = "hci")]
 pub mod stream;
+#[cfg(feature = "hci_usb")]
+pub mod usb;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
 pub enum StreamError {

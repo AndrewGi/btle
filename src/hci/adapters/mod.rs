@@ -5,28 +5,16 @@ use crate::{
     bytes::Storage,
     error,
     hci::{
-        self,
         command::Command,
         event::CommandComplete,
         packet::RawPacket,
         stream::{HCIStreamable, Stream},
-        ErrorCode, StreamError,
     },
     le::adapter::Error,
 };
 use core::fmt::Formatter;
 use core::pin::Pin;
 
-impl From<StreamError> for Error {
-    fn from(e: StreamError) -> Self {
-        Error::StreamError(e)
-    }
-}
-impl From<hci::ErrorCode> for Error {
-    fn from(e: ErrorCode) -> Self {
-        Error::ErrorCode(e)
-    }
-}
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:?}", self)
