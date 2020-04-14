@@ -2,7 +2,7 @@ use crate::le::advertisement::{
     AdStructureType, AdType, ConstAdStructType, UnpackableAdStructType,
 };
 use crate::PackError;
-use std::fmt::Formatter;
+use core::fmt::Formatter;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Default, Debug, Hash)]
 pub struct TxPowerLevel {
