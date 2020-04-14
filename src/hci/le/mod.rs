@@ -8,8 +8,9 @@ pub mod random;
 pub mod scan;
 use crate::hci::event::{Event, EventCode};
 use crate::hci::{Opcode, OCF, OGF};
-use crate::{ConversionError, PackError};
+use crate::PackError;
 use core::convert::TryFrom;
+use driver_async::ConversionError;
 
 /// OCF LE Controller code.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]

@@ -1,9 +1,6 @@
 //! Contains logic for HCI Adapters (usually byte streams).
 pub mod le;
-
 use crate::{
-    bytes::Storage,
-    error,
     hci::{
         command::Command,
         event::CommandComplete,
@@ -14,6 +11,7 @@ use crate::{
 };
 use core::fmt::Formatter;
 use core::pin::Pin;
+use driver_async::{bytes::Storage, error};
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {

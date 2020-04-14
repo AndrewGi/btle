@@ -28,10 +28,11 @@ pub enum StreamError {
     IOError,
 }
 
-use crate::bytes::ToFromBytesEndian;
-use crate::{ConversionError, PackError};
+use crate::PackError;
 use core::convert::{TryFrom, TryInto};
 use core::fmt::Formatter;
+use driver_async::bytes::ToFromBytesEndian;
+use driver_async::ConversionError;
 
 pub const MAX_ACL_SIZE: usize = (1492 + 4);
 pub const MAX_SCO_SIZE: usize = 255;

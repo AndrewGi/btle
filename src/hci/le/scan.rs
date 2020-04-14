@@ -1,11 +1,11 @@
 //! LE [`SetScanEnable`], [`SetScanParameters`], and other primitive scan types.
-use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
 use crate::hci::le::LEControllerOpcode;
 use crate::hci::Opcode;
 use crate::le::scan::ScanParameters;
 use crate::PackError;
+use driver_async::bytes::ToFromBytesEndian;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetScanEnable {

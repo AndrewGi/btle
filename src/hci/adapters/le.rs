@@ -2,7 +2,6 @@ use crate::le::adapter::Error;
 use crate::le::advertisement::StaticAdvBuffer;
 use crate::le::advertiser::{Advertiser, AdvertisingParameters};
 use crate::{
-    bytes::Storage,
     hci::{
         adapters,
         event::{Event, EventPacket, StaticEventBuffer},
@@ -24,6 +23,7 @@ use core::convert::TryFrom;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
+use driver_async::bytes::Storage;
 
 pub struct LEAdapter<'a, S: HCIStreamable> {
     adapter: Pin<&'a mut adapters::Adapter<S>>,
@@ -183,7 +183,8 @@ impl<
         Buf: Storage<ReportInfo<ReportBuf>>,
         ReportBuf: Storage<u8> + Copy + Default,
         PacketBuf: Storage<u8>,
-    > futures_core::Stream for AdvertisementStream<'a, 'b, S, Buf, ReportBuf, PacketBuf>
+    > driver_async::asyncs::stream::Stream
+    for AdvertisementStream<'a, 'b, S, Buf, ReportBuf, PacketBuf>
 {
     type Item = Result<ReportInfo<ReportBuf>, adapter::Error>;
 

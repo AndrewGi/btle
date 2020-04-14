@@ -23,13 +23,11 @@ extern crate std;
 #[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
 /// Workaround for returning futures from async Traits.
-pub type BoxFuture<'a, T> = futures_core::future::BoxFuture<'a, T>;
+pub type BoxFuture<'a, T> = core::pin::Pin<Box<dyn core::future::Future<Output = T> + 'a>>;
 /// Workaround for returning streams from async Traits.
-pub type BoxStream<'a, T> = futures_core::stream::BoxStream<'a, T>;
-
-pub mod asyncs;
-pub mod bytes;
-pub mod error;
+pub type BoxStream<'a, T> =
+    core::pin::Pin<Box<dyn driver_async::asyncs::stream::Stream<Item = T> + 'a>>;
+extern crate core;
 #[cfg(feature = "hci")]
 pub mod hci;
 pub mod le;
@@ -39,10 +37,6 @@ pub mod windows;
 
 use core::convert::{TryFrom, TryInto};
 
-/// Basic `ConversionError` for when primitives can't be converted to/from bytes because of invalid
-/// states. Most modules use their own errors for when there is more information to report.
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct ConversionError(());
 /// Byte Packing/Unpacking error. Usually used for packing/unpacking a struct/type into/from
 /// a byte buffer.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -72,8 +66,8 @@ impl PackError {
         PackError::BadBytes { index: Some(index) }
     }
 }
-impl error::Error for PackError {}
-
+impl driver_async::error::Error for PackError {}
+use driver_async::ConversionError;
 /// Received Signal Strength Indicator (RSSI). Units: `dBm`. Range -127 dBm to +20 dBm. Defaults to
 /// 0 dBm.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Default)]
@@ -180,7 +174,7 @@ impl CompanyID {
         2
     }
 }
-impl crate::bytes::ToFromBytesEndian for CompanyID {
+impl driver_async::bytes::ToFromBytesEndian for CompanyID {
     type AsBytesType = [u8; 2];
 
     #[must_use]

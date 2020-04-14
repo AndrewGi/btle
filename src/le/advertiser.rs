@@ -1,7 +1,8 @@
 //! Generic BLE Advertiser (WIP)
 use crate::le::adapter;
-use crate::{BTAddress, BoxFuture, ConversionError};
+use crate::{BTAddress, BoxFuture};
 use core::convert::TryFrom;
+use driver_async::ConversionError;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct AdvertisingInterval(u16);

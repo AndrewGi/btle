@@ -1,9 +1,9 @@
-use crate::bytes::Storage;
 use crate::le::advertisement::{
     AdStructureType, AdType, ConstAdStructType, UnpackableAdStructType,
 };
 use crate::PackError;
 use core::str::Utf8Error;
+use driver_async::bytes::Storage;
 
 pub struct ShortenedLocalName<Buf> {
     pub name: Buf,

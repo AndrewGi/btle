@@ -1,10 +1,11 @@
 //! HCI Event and event utilities.
-use crate::bytes::{StaticBuf, Storage};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{ErrorCode, Opcode, EVENT_CODE_LEN, EVENT_MAX_LEN, OPCODE_LEN};
-use crate::{ConversionError, PackError};
+use crate::PackError;
 use core::convert::TryFrom;
 use core::fmt::Formatter;
+use driver_async::bytes::{StaticBuf, Storage};
+use driver_async::ConversionError;
 
 /// HCI Event Code. 8-bit code corresponding to an HCI Event. Check the Bluetooth Core Spec for more.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]

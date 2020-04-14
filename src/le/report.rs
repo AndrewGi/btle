@@ -1,7 +1,8 @@
 use crate::le::advertisement::{RawAdvertisement, StaticAdvBuffer};
-use crate::{BTAddress, ConversionError, BT_ADDRESS_LEN, RSSI};
+use crate::{BTAddress, BT_ADDRESS_LEN, RSSI};
 use core::convert::TryFrom;
 use core::fmt::Formatter;
+use driver_async::ConversionError;
 
 pub struct NumReports(u8);
 impl NumReports {

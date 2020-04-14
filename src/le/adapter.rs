@@ -1,6 +1,6 @@
-use crate::error::IOError;
 use crate::hci;
 use crate::hci::{ErrorCode, StreamError};
+use driver_async::error::IOError;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum Error {

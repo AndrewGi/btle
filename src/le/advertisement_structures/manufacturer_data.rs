@@ -1,8 +1,8 @@
-use crate::bytes::{Storage, ToFromBytesEndian};
 use crate::le::advertisement::{
     AdStructureType, AdType, ConstAdStructType, UnpackableAdStructType,
 };
 use crate::{CompanyID, PackError};
+use driver_async::bytes::{Storage, ToFromBytesEndian};
 
 #[derive(Copy, Clone, Debug)]
 pub struct ManufacturerSpecificData<Buf> {

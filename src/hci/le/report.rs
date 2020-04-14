@@ -1,10 +1,10 @@
 //! LE [`AdvertisingReport`] and [`ReportInfo`] types.
-use crate::bytes::Storage;
 use crate::hci::le::{MetaEvent, MetaEventCode};
 use crate::le::advertisement::{RawAdvertisement, StaticAdvBuffer, MAX_ADV_LEN};
 use crate::le::report::{AddressType, EventType, NumReports, ReportInfo};
 use crate::{BTAddress, PackError, BT_ADDRESS_LEN, RSSI};
 use core::convert::TryFrom;
+use driver_async::bytes::Storage;
 
 pub struct AdvertisingReport<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]> = StaticAdvBuffer> {
     pub reports: T,

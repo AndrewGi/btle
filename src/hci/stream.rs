@@ -1,15 +1,16 @@
 //! HCI Stream. Abstracts over byte read/write functions to allow for reading events and writting
 //! commands.
-use crate::bytes::Storage;
 use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{Opcode, StreamError, FULL_COMMAND_MAX_LEN};
-use crate::{asyncs::poll_function::poll_fn, error, PackError};
+use crate::PackError;
 use core::convert::{TryFrom, TryInto};
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
+use driver_async::bytes::Storage;
+use driver_async::{asyncs::poll_function::poll_fn, error};
 
 impl From<PackError> for StreamError {
     fn from(e: PackError) -> Self {
@@ -252,6 +253,7 @@ impl<'b: 'r, 'r, R: HCIReader> core::future::Future for ByteRead<'b, 'r, R> {
     }
 }
 const EVENT_HEADER_LEN: usize = 3;
+/*
 #[cfg(feature = "std")]
 impl<T: futures_io::AsyncRead + Unpin> HCIReader for T {
     fn poll_read(
@@ -276,6 +278,7 @@ impl<T: futures_io::AsyncWrite> HCIWriter for T {
         futures_io::AsyncWrite::poll_flush(self, cx).map_err(|_| StreamError::IOError)
     }
 }
+*/
 /// Implements all the traits required to be a complete HCI Stream.
 pub trait HCIStreamable: HCIWriter + HCIReader + HCIFilterable + Send {}
 impl<T: HCIWriter + HCIReader + HCIFilterable + Send> HCIStreamable for T {}
@@ -284,8 +287,8 @@ pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Stora
     stream: &'a mut Stream<S>,
     buf: Buf,
 }
-impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>> futures_core::stream::Stream
-    for PacketStream<'a, S, Buf>
+impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>>
+    driver_async::asyncs::stream::Stream for PacketStream<'a, S, Buf>
 {
     type Item = Result<RawPacket<Buf>, StreamError>;
 
