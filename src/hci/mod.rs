@@ -2,6 +2,7 @@
 //! supporting HCI streams.
 //! (HCI Layer is Little Endian).
 
+pub mod adapter;
 pub mod adapters;
 pub mod command;
 pub mod event;

@@ -1,13 +1,11 @@
 //! Contains logic for HCI Adapters (usually byte streams).
 pub mod le;
-use crate::{
-    hci::{
-        command::Command,
-        event::CommandComplete,
-        packet::RawPacket,
-        stream::{HCIStreamable, Stream},
-    },
-    le::adapter::Error,
+use crate::hci::{
+    adapter::Error,
+    command::Command,
+    event::CommandComplete,
+    packet::RawPacket,
+    stream::{HCIStreamable, Stream},
 };
 use core::fmt::Formatter;
 use core::pin::Pin;

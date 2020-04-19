@@ -1,5 +1,6 @@
-use crate::hci::usb::device::DeviceIdentifier;
+use crate::hci::usb::device::{Device, DeviceIdentifier};
 use crate::hci::usb::Error;
+use driver_async::asyncs::time::Duration;
 
 pub const HCI_COMMAND_ENDPOINT: u8 = 0x01;
 pub const ACL_DATA_OUT_ENDPOINT: u8 = 0x02;
@@ -14,8 +15,14 @@ pub struct Adapter {
     pub device_descriptor: rusb::DeviceDescriptor,
     _private: (),
 }
+impl core::fmt::Debug for Adapter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Adapter({:?})", self.device_descriptor)
+    }
+}
 impl Adapter {
-    pub fn new(handle: rusb::DeviceHandle<rusb::Context>) -> Result<Adapter, Error> {
+    pub fn from_handle(mut handle: rusb::DeviceHandle<rusb::Context>) -> Result<Adapter, Error> {
+        handle.claim_interface(INTERFACE_NUM)?;
         Ok(Adapter::from_parts(
             handle.device().device_descriptor()?,
             handle,
@@ -69,11 +76,32 @@ impl Adapter {
             None => Ok(None),
         }
     }
-    pub fn write_hci_command_bytes(&mut self, _bytes: &[u8]) -> Result<(), Error> {
-        unimplemented!()
+    pub fn write_hci_command_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        const TIMEOUT: Duration = Duration::from_secs(1);
+        //TODO: Change from synchronous IO to Async IO.
+        let mut index = 0;
+        let size = bytes.len();
+        while index < size {
+            // bmRequestType = 0x20, bRequest = 0x00, wValue = 0x00, wIndex = 0x00 according to
+            // Bluetooth Core Spec v5.2 Vol 4 Part B 2.2
+            let amount = self
+                .handle
+                .write_control(0x20, 0, 0, 0, &bytes[index..], TIMEOUT)?;
+            index += amount;
+        }
+        Ok(())
+    }
+    pub fn device(&self) -> Device {
+        Device::new(self.handle.device())
     }
     pub fn reset(&mut self) -> Result<(), Error> {
         self.handle.reset()?;
         Ok(())
+    }
+}
+impl Drop for Adapter {
+    fn drop(&mut self) {
+        // We claim the interface when we make the adapter so we must release when we drop.
+        let _ = self.handle.release_interface(INTERFACE_NUM);
     }
 }

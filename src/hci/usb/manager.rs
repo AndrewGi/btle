@@ -32,7 +32,7 @@ impl Manager {
     pub fn open_adapter(&self, vendor_id: u16, product_id: u16) -> Result<Option<Adapter>, Error> {
         self.context
             .open_device_with_vid_pid(vendor_id, product_id)
-            .map(Adapter::new)
+            .map(Adapter::from_handle)
             .transpose()
     }
 }

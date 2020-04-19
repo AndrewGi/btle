@@ -1,5 +1,5 @@
 //! Generic BLE Advertiser (WIP)
-use crate::le::adapter;
+use crate::hci::adapter;
 use crate::{BTAddress, BoxFuture};
 use core::convert::TryFrom;
 use driver_async::ConversionError;

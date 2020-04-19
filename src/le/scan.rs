@@ -1,4 +1,4 @@
-use crate::le::adapter;
+use crate::hci::adapter;
 use crate::le::report::ReportInfo;
 use crate::{BoxFuture, BoxStream};
 use core::convert::TryFrom;

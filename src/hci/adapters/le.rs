@@ -1,9 +1,8 @@
-use crate::le::adapter::Error;
 use crate::le::advertisement::StaticAdvBuffer;
 use crate::le::advertiser::{Advertiser, AdvertisingParameters};
 use crate::{
     hci::{
-        adapters,
+        adapter, adapters,
         event::{Event, EventPacket, StaticEventBuffer},
         le,
         le::random::RAND_LEN,
@@ -12,7 +11,6 @@ use crate::{
         StreamError,
     },
     le::{
-        adapter,
         advertisement::MAX_ADV_LEN,
         report::ReportInfo,
         scan::{Observer, ScanParameters},
@@ -250,14 +248,17 @@ impl<'a, S: HCIStreamable> Observer for LEAdapter<'a, S> {
 }
 
 impl<'a, S: HCIStreamable> Advertiser for LEAdapter<'a, S> {
-    fn set_advertising_enable(&mut self, is_enabled: bool) -> BoxFuture<Result<(), Error>> {
+    fn set_advertising_enable(
+        &mut self,
+        is_enabled: bool,
+    ) -> BoxFuture<Result<(), adapter::Error>> {
         Box::pin(LEAdapter::set_advertising_enable(self, is_enabled))
     }
 
     fn set_advertising_parameters(
         &mut self,
         advertisement_parameters: AdvertisingParameters,
-    ) -> BoxFuture<Result<(), Error>> {
+    ) -> BoxFuture<Result<(), adapter::Error>> {
         Box::pin(LEAdapter::set_advertising_parameters(
             self,
             advertisement_parameters,
@@ -267,7 +268,7 @@ impl<'a, S: HCIStreamable> Advertiser for LEAdapter<'a, S> {
     fn set_advertising_data<'s, 'b: 's>(
         &'b mut self,
         data: &'s [u8],
-    ) -> BoxFuture<'s, Result<(), Error>> {
+    ) -> BoxFuture<'s, Result<(), adapter::Error>> {
         Box::pin(LEAdapter::set_advertising_data(self, data))
     }
 }

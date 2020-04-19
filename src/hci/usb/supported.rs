@@ -18,7 +18,7 @@ pub static KNOWN_DEVICES: [DeviceIdentifier; 12] = [
     DeviceIdentifier {
         vendor_id: 0x0a12,
         product_id: 0x0001,
-    }, // CSR
+    }, // CSR8510 A10
     DeviceIdentifier {
         vendor_id: 0x0b05,
         product_id: 0x17cb,
