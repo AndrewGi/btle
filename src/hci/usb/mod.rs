@@ -3,7 +3,7 @@ pub mod device;
 pub mod manager;
 pub mod supported;
 
-use driver_async::error::IOError;
+use crate::error::IOError;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Error(pub IOError);
@@ -37,6 +37,6 @@ impl From<Error> for IOError {
         e.0
     }
 }
-impl driver_async::error::Error for Error {}
+impl crate::error::Error for Error {}
 #[cfg(feature = "std")]
 impl std::error::Error for Error {}

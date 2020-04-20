@@ -1,9 +1,9 @@
+use crate::error::Error;
 use crate::hci::adapter;
 use crate::le::report::ReportInfo;
+use crate::ConversionError;
 use crate::{BoxFuture, BoxStream};
 use core::convert::TryFrom;
-use driver_async::error::Error;
-use driver_async::ConversionError;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum ScanningFilterPolicy {

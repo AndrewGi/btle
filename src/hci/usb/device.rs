@@ -1,6 +1,6 @@
+use crate::error::IOError;
 use crate::hci::usb::adapter::Adapter;
 use crate::hci::usb::Error;
-use driver_async::error::IOError;
 use rusb::Context;
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default, Debug)]

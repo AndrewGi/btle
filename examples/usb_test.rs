@@ -1,5 +1,5 @@
+use btle::error::IOError;
 use btle::hci::usb;
-use driver_async::error::IOError;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = tokio::runtime::Builder::new()
@@ -29,5 +29,4 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         let packet = adapter.read_event_packet::<Box<[u8]>>()?;
         println!("got event! {:?}", packet);
     }
-    Ok(())
 }

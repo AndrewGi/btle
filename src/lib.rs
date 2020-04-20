@@ -22,12 +22,14 @@ extern crate std;
 
 #[cfg_attr(not(feature = "std"), macro_use)]
 extern crate alloc;
+pub(crate) use futures_util::stream::Stream;
 /// Workaround for returning futures from async Traits.
 pub type BoxFuture<'a, T> = core::pin::Pin<Box<dyn core::future::Future<Output = T> + 'a>>;
 /// Workaround for returning streams from async Traits.
-pub type BoxStream<'a, T> =
-    core::pin::Pin<Box<dyn driver_async::asyncs::stream::Stream<Item = T> + 'a>>;
+pub type BoxStream<'a, T> = core::pin::Pin<Box<dyn Stream<Item = T> + 'a>>;
 extern crate core;
+pub mod bytes;
+pub mod error;
 #[cfg(feature = "hci")]
 pub mod hci;
 pub mod le;
@@ -66,8 +68,12 @@ impl PackError {
         PackError::BadBytes { index: Some(index) }
     }
 }
-impl driver_async::error::Error for PackError {}
-use driver_async::ConversionError;
+impl crate::error::Error for PackError {}
+
+/// Basic `ConversionError` for when primitives can't be converted to/from bytes because of invalid
+/// states. Most modules use their own errors for when there is more information to report.
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct ConversionError(pub ());
 /// Received Signal Strength Indicator (RSSI). Units: `dBm`. Range -127 dBm to +20 dBm. Defaults to
 /// 0 dBm.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Default)]
@@ -174,7 +180,7 @@ impl CompanyID {
         2
     }
 }
-impl driver_async::bytes::ToFromBytesEndian for CompanyID {
+impl crate::bytes::ToFromBytesEndian for CompanyID {
     type AsBytesType = [u8; 2];
 
     #[must_use]

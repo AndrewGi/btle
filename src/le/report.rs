@@ -1,8 +1,8 @@
 use crate::le::advertisement::{RawAdvertisement, StaticAdvBuffer};
+use crate::ConversionError;
 use crate::{BTAddress, BT_ADDRESS_LEN, RSSI};
 use core::convert::TryFrom;
 use core::fmt::Formatter;
-use driver_async::ConversionError;
 
 pub struct NumReports(u8);
 impl NumReports {
@@ -116,6 +116,7 @@ impl From<AddressType> for u8 {
 /// # Important
 /// `T` is the byte buffer that stores the advertisement data (0-31 bytes) which means `T` should
 /// always be able to hold 31 bytes if you are using `unpack_from`.
+#[derive(Copy, Clone)]
 pub struct ReportInfo<T = StaticAdvBuffer> {
     /// Advertisement Type.
     pub event_type: EventType,
@@ -137,18 +138,6 @@ impl<T: AsRef<[u8]>> core::fmt::Debug for ReportInfo<T> {
             .field("rssi", &self.rssi)
             .field("data", &self.data.as_ref())
             .finish()
-    }
-}
-impl<T: AsRef<[u8]> + Copy> Copy for ReportInfo<T> {}
-impl<T: AsRef<[u8]> + Clone> Clone for ReportInfo<T> {
-    fn clone(&self) -> Self {
-        Self {
-            event_type: self.event_type,
-            address_type: self.address_type,
-            address: self.address,
-            data: self.data.clone(),
-            rssi: self.rssi,
-        }
     }
 }
 impl<T: AsRef<[u8]> + Default> Default for ReportInfo<T> {

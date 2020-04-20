@@ -10,20 +10,22 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["hci",  "std", "driver_async/tokio_asyncs"]
+default = ["hci",  "std"]
 bluez = ["nix", "libc", "std", "hci", "tokio/uds"]
 winrt_drivers = ["winrt", "std"]
 hci = []
 hci_usb = ["hci", "rusb"]
 remote = ["std", "hci"]
-std = ["driver_async/std"]
+std = []
+
 [dependencies]
 winrt = {version = "0.6.0", default_features = false, features = ["windows-devices", "windows-storage"], optional = true}
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2.66", optional = true}
 tokio = {version = "0.2.13", optional = true, default_features = false}
 rusb = {version = "0.5.5", optional = true}
-driver_async = {version = "0.0.2", path = "../async_driver", default_features = false, features= []}
+futures-util = "0.3.4"
+
 [[example]]
 name = "advertisement_dump"
 required-features = ["bluez"]

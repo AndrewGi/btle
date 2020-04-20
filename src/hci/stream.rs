@@ -1,5 +1,7 @@
 //! HCI Stream. Abstracts over byte read/write functions to allow for reading events and writting
 //! commands.
+use crate::bytes::Storage;
+use crate::error;
 use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
 use crate::hci::packet::{PacketType, RawPacket};
@@ -9,8 +11,7 @@ use core::convert::{TryFrom, TryInto};
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use driver_async::bytes::Storage;
-use driver_async::{asyncs::poll_function::poll_fn, error};
+use futures_util::future::poll_fn;
 
 impl From<PackError> for StreamError {
     fn from(e: PackError) -> Self {
@@ -177,8 +178,8 @@ impl<S: HCIReader> Stream<S> {
         filter.enable_event(EventCode::CommandComplete);
         filter.enable_event(EventCode::LEMeta);
 
-        filter.enable_event(CommandComplete::<Cmd::Return>::CODE);
-        if !filter.get_event(CommandComplete::<Cmd::Return>::CODE) {
+        filter.enable_event(CommandComplete::<Cmd::Return>::EVENT_CODE);
+        if !filter.get_event(CommandComplete::<Cmd::Return>::EVENT_CODE) {
             return Err(StreamError::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
@@ -194,10 +195,10 @@ impl<S: HCIReader> Stream<S> {
         for _try_i in 0..HCI_EVENT_READ_TRIES {
             // Reuse `buf` to read the RawPacket
             let event = EventPacket::try_from(self.as_mut().read_packet(&mut buf[..]).await?)?;
-            if event.event_code() == CommandComplete::<Cmd::Return>::CODE {
+            if event.event_code() == CommandComplete::<Cmd::Return>::EVENT_CODE {
                 if Opcode::unpack(&event.parameters().as_ref()[1..3])? == Cmd::opcode() {
                     self.stream_pinned().set_filter(&old_filter)?;
-                    return CommandComplete::unpack_from(event.parameters())
+                    return CommandComplete::event_unpack_from(event.parameters())
                         .map_err(StreamError::CommandError);
                 }
             }
@@ -287,8 +288,8 @@ pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Stora
     stream: &'a mut Stream<S>,
     buf: Buf,
 }
-impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>>
-    driver_async::asyncs::stream::Stream for PacketStream<'a, S, Buf>
+impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>> crate::Stream
+    for PacketStream<'a, S, Buf>
 {
     type Item = Result<RawPacket<Buf>, StreamError>;
 

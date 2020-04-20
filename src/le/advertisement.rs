@@ -1,9 +1,9 @@
 //! BLE Advertisements. Provides processing of Advertisement Structs.
 
+use crate::bytes::{StaticBuf, Storage};
 use crate::PackError;
 use core::convert::TryFrom;
 use core::mem;
-use driver_async::bytes::{StaticBuf, Storage};
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub struct AdStructureError(());

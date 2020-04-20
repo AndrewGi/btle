@@ -1,4 +1,5 @@
 //! LE [`SetAdvertisingEnable`], [`SetAdvertisingData`] and other advertising types.
+use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
 use crate::hci::event::{ReturnParameters, StatusReturn};
 use crate::hci::le::LEControllerOpcode;
@@ -7,10 +8,9 @@ use crate::le::advertiser::{
     AdvertisingInterval, AdvertisingParameters, AdvertisingType, ChannelMap, FilterPolicy,
     OwnAddressType, PeerAddressType,
 };
+use crate::ConversionError;
 use crate::{BTAddress, PackError, BT_ADDRESS_LEN, RSSI};
 use core::convert::{TryFrom, TryInto};
-use driver_async::bytes::ToFromBytesEndian;
-use driver_async::ConversionError;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetAdvertisingEnable {

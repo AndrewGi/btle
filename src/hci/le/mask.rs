@@ -1,12 +1,12 @@
 //! LE [`SetEventMask`] and [`EventMask`] for dealing with LE event masks.
+use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
 use crate::hci::event::StatusReturn;
 use crate::hci::le::{LEControllerOpcode, MetaEventCode};
 use crate::hci::Opcode;
+use crate::ConversionError;
 use crate::PackError;
 use core::convert::TryFrom;
-use driver_async::bytes::ToFromBytesEndian;
-use driver_async::ConversionError;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct EventMask(u64);

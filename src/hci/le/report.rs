@@ -1,14 +1,22 @@
 //! LE [`AdvertisingReport`] and [`ReportInfo`] types.
+use crate::bytes::Storage;
 use crate::hci::le::{MetaEvent, MetaEventCode};
 use crate::le::advertisement::{RawAdvertisement, StaticAdvBuffer, MAX_ADV_LEN};
 use crate::le::report::{AddressType, EventType, NumReports, ReportInfo};
 use crate::{BTAddress, PackError, BT_ADDRESS_LEN, RSSI};
 use core::convert::TryFrom;
-use driver_async::bytes::Storage;
 
 pub struct AdvertisingReport<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]> = StaticAdvBuffer> {
     pub reports: T,
     _marker: core::marker::PhantomData<B>,
+}
+impl<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]> + Clone> IntoIterator for AdvertisingReport<T, B> {
+    type Item = ReportInfo<B>;
+    type IntoIter = AdvertisingReportIter<T, B>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        AdvertisingReportIter::new(self)
+    }
 }
 impl<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]>> AdvertisingReport<T, B> {
     pub const SUBEVENT_CODE: MetaEventCode = MetaEventCode::AdvertisingReport;
@@ -32,11 +40,11 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
 {
     const META_CODE: MetaEventCode = Self::SUBEVENT_CODE;
 
-    fn byte_len(&self) -> usize {
+    fn meta_byte_len(&self) -> usize {
         AdvertisingReport::byte_len(self)
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    fn meta_unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {
@@ -98,7 +106,7 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
         Ok(out)
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+    fn meta_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
         let reports = self.reports.as_ref();
         let reports_len = reports.len();
         let num_reports =
@@ -136,5 +144,33 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
         }
         buf[0] = num_reports.into();
         Ok(())
+    }
+}
+
+pub struct AdvertisingReportIter<Buf: AsRef<[ReportInfo<ReportBuf>]>, ReportBuf: AsRef<[u8]>> {
+    pub report: AdvertisingReport<Buf, ReportBuf>,
+    pub index: usize,
+    _marker: core::marker::PhantomData<ReportBuf>,
+}
+impl<Buf: AsRef<[ReportInfo<ReportBuf>]>, ReportBuf: AsRef<[u8]>>
+    AdvertisingReportIter<Buf, ReportBuf>
+{
+    pub fn new(report: AdvertisingReport<Buf, ReportBuf>) -> Self {
+        AdvertisingReportIter {
+            report,
+            index: 0,
+            _marker: core::marker::PhantomData,
+        }
+    }
+}
+impl<Buf: AsRef<[ReportInfo<ReportBuf>]>, ReportBuf: AsRef<[u8]> + Clone> Iterator
+    for AdvertisingReportIter<Buf, ReportBuf>
+{
+    type Item = ReportInfo<ReportBuf>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let report = self.report.reports.as_ref().get(self.index)?;
+        self.index += 1;
+        Some(report.clone())
     }
 }

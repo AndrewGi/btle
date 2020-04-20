@@ -1,5 +1,6 @@
 //! Contains logic for HCI Adapters (usually byte streams).
 pub mod le;
+/*
 use crate::hci::{
     adapter::Error,
     command::Command,
@@ -8,7 +9,7 @@ use crate::hci::{
     stream::{HCIStreamable, Stream},
 };
 use core::pin::Pin;
-use driver_async::bytes::Storage;
+use crate::bytes::Storage;
 
 pub struct Adapter<R: HCIStreamable> {
     pub stream: Stream<R>,
@@ -61,3 +62,4 @@ impl<R: HCIStreamable> AsMut<Stream<R>> for Adapter<R> {
         &mut self.stream
     }
 }
+*/

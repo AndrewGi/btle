@@ -1,7 +1,7 @@
 //! HCI Packet type. Packets are sent and received from an HCI Controller.
 use crate::PackError;
+use crate::{bytes::Storage, ConversionError};
 use core::convert::{TryFrom, TryInto};
-use driver_async::{bytes::Storage, ConversionError};
 
 /// HCI Packet Type.
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]

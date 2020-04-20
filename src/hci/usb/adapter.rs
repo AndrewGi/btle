@@ -1,3 +1,5 @@
+use crate::bytes::Storage;
+use crate::error::IOError;
 use crate::hci;
 use crate::hci::command::Command;
 use crate::hci::event::{Event, EventCode, EventPacket, ReturnParameters};
@@ -6,9 +8,7 @@ use crate::hci::stream::HCI_EVENT_READ_TRIES;
 use crate::hci::usb::device::{Device, DeviceIdentifier};
 use crate::hci::usb::Error;
 use crate::hci::{Opcode, StreamError};
-use driver_async::asyncs::time::Duration;
-use driver_async::bytes::Storage;
-use driver_async::error::IOError;
+use core::time::Duration;
 use hci::event::CommandComplete;
 use std::convert::TryFrom;
 
@@ -123,7 +123,11 @@ impl Adapter {
         let size = buf.len();
         // TODO: Fix probably infinite loop
         while index < size {
-            let amount = self.read_some_event_bytes(&mut buf[index..])?;
+            let amount = match self.read_some_event_bytes(&mut buf[index..]) {
+                Ok(a) => a,
+                Err(Error(IOError::TimedOut)) => 0,
+                Err(e) => return Err(e),
+            };
             index += amount;
         }
         Ok(())
@@ -163,7 +167,7 @@ impl Adapter {
             let len = usize::from(header[1]);
             self.read_event_bytes(buf[..len].as_mut())?;
             let event = EventPacket::new(event_code, &buf[..len]);
-            if event.event_code() == CommandComplete::<Cmd::Return>::CODE {
+            if event.event_code() == CommandComplete::<Cmd::Return>::EVENT_CODE {
                 if Opcode::unpack(&event.parameters().as_ref()[1..3])
                     .map_err(|_| StreamError::BadOpcode)?
                     == Cmd::opcode()

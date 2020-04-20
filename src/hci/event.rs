@@ -1,11 +1,11 @@
 //! HCI Event and event utilities.
+use crate::bytes::{StaticBuf, Storage};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{ErrorCode, Opcode, EVENT_CODE_LEN, EVENT_MAX_LEN, OPCODE_LEN};
+use crate::ConversionError;
 use crate::PackError;
 use core::convert::TryFrom;
 use core::fmt::Formatter;
-use driver_async::bytes::{StaticBuf, Storage};
-use driver_async::ConversionError;
 
 /// HCI Event Code. 8-bit code corresponding to an HCI Event. Check the Bluetooth Core Spec for more.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -159,33 +159,33 @@ impl TryFrom<u8> for EventCode {
     }
 }
 pub trait Event {
-    const CODE: EventCode;
+    const EVENT_CODE: EventCode;
     /// The byte length of the `Event` parameters.
-    fn byte_len(&self) -> usize;
-    fn full_len(&self) -> usize {
-        self.byte_len() + EVENT_CODE_LEN + 1
+    fn event_byte_len(&self) -> usize;
+    fn event_full_byte_len(&self) -> usize {
+        self.event_byte_len() + EVENT_CODE_LEN + 1
     }
     /// Unpack the `Event` from a byte buffer.
-    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    fn event_unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized;
     fn unpack_event_packet<S: AsRef<[u8]>>(packet: &EventPacket<S>) -> Result<Self, PackError>
     where
         Self: Sized,
     {
-        if packet.event_code != Self::CODE {
+        if packet.event_code != Self::EVENT_CODE {
             Err(PackError::BadOpcode)
         } else {
-            Self::unpack_from(packet.parameters())
+            Self::event_unpack_from(packet.parameters())
         }
     }
     /// Pack the `Event` parameters into a byte buffer.
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
-    fn pack_event_packet<S: Storage<u8>>(&self) -> Result<EventPacket<S>, PackError> {
-        let mut out = S::with_size(self.full_len());
-        self.pack_into(out.as_mut())?;
+    fn event_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
+    fn event_pack_packet<S: Storage<u8>>(&self) -> Result<EventPacket<S>, PackError> {
+        let mut out = S::with_size(self.event_full_byte_len());
+        self.event_pack_into(out.as_mut())?;
         Ok(EventPacket {
-            event_code: Self::CODE,
+            event_code: Self::EVENT_CODE,
             parameters: out,
         })
     }
@@ -217,7 +217,7 @@ impl From<FullEventBuffer> for [u8; EVENT_MAX_LEN] {
 }
 pub type StaticEventBuffer = StaticBuf<u8, FullEventBuffer>;
 /// Unprocessed HCI Event Packet
-pub struct EventPacket<Storage: AsRef<[u8]>> {
+pub struct EventPacket<Storage> {
     pub event_code: EventCode,
     pub parameters: Storage,
 }
@@ -226,6 +226,12 @@ impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
         Self {
             event_code: opcode,
             parameters,
+        }
+    }
+    pub fn as_ref(&self) -> EventPacket<&'_ [u8]> {
+        EventPacket {
+            event_code: self.event_code,
+            parameters: self.parameters.as_ref(),
         }
     }
     pub fn event_code(&self) -> EventCode {
@@ -320,13 +326,13 @@ pub struct CommandComplete<Params: ReturnParameters> {
 impl<Params: ReturnParameters> CommandComplete<Params> {}
 pub const COMMAND_COMPLETE_HEADER_LEN: usize = 1 + OPCODE_LEN;
 impl<Params: ReturnParameters> Event for CommandComplete<Params> {
-    const CODE: EventCode = EventCode::CommandComplete;
+    const EVENT_CODE: EventCode = EventCode::CommandComplete;
 
-    fn byte_len(&self) -> usize {
+    fn event_byte_len(&self) -> usize {
         COMMAND_COMPLETE_HEADER_LEN + self.params.byte_len()
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    fn event_unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {
@@ -345,8 +351,8 @@ impl<Params: ReturnParameters> Event for CommandComplete<Params> {
         }
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
-        PackError::expect_length(self.byte_len(), buf)?;
+    fn event_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(self.event_byte_len(), buf)?;
         self.params.pack_into(&mut buf[3..])?;
         self.opcode.pack(&mut buf[1..3])?;
         buf[0] = self.num_command_packets;
@@ -361,13 +367,13 @@ pub struct CommandStatus {
 }
 pub const COMMAND_STATUS_LEN: usize = 1 + 1 + OPCODE_LEN;
 impl Event for CommandStatus {
-    const CODE: EventCode = EventCode::CommandStatus;
+    const EVENT_CODE: EventCode = EventCode::CommandStatus;
 
-    fn byte_len(&self) -> usize {
+    fn event_byte_len(&self) -> usize {
         COMMAND_STATUS_LEN
     }
 
-    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+    fn event_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
         PackError::expect_length(COMMAND_STATUS_LEN, buf)?;
         self.opcode.pack(&mut buf[2..4])?;
         buf[0] = self.status.into();
@@ -375,7 +381,7 @@ impl Event for CommandStatus {
         Ok(())
     }
 
-    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    fn event_unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
     {

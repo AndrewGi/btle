@@ -1,9 +1,9 @@
+use crate::asyncs::stream::StreamExt;
 use btle::hci::adapters::le::AdvertisementStream;
 use btle::hci::event::EventCode;
 use btle::hci::packet::PacketType;
 use btle::le;
 use btle::le::report::ReportInfo;
-use driver_async::asyncs::stream::StreamExt;
 #[allow(unused_imports)]
 use std::convert::{TryFrom, TryInto};
 use std::pin::Pin;

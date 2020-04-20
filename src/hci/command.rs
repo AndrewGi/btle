@@ -1,4 +1,5 @@
 //! HCI Command and command utilities.
+use crate::bytes::Storage;
 use crate::hci::event::ReturnParameters;
 use crate::hci::packet::PacketType;
 use crate::hci::{Opcode, OPCODE_LEN};
@@ -10,6 +11,14 @@ use core::convert::TryFrom;
 pub struct CommandPacket<Storage> {
     pub opcode: Opcode,
     pub parameters: Storage,
+}
+impl<Storage: AsRef<[u8]>> CommandPacket<Storage> {
+    pub fn as_ref(&self) -> CommandPacket<&[u8]> {
+        CommandPacket {
+            opcode: self.opcode,
+            parameters: self.parameters.as_ref(),
+        }
+    }
 }
 pub struct CommandHeader {
     pub opcode: Opcode,
@@ -35,6 +44,15 @@ pub trait Command {
             .ok()
             .ok_or(PackError::InvalidFields)?;
         Ok(full)
+    }
+    fn pack_command_packet<S: Storage<u8>>(&self) -> Result<CommandPacket<S>, PackError> {
+        let len = self.byte_len();
+        let mut buf = S::with_size(len);
+        self.pack_into(buf.as_mut())?;
+        Ok(CommandPacket {
+            opcode: Self::opcode(),
+            parameters: buf,
+        })
     }
     fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where

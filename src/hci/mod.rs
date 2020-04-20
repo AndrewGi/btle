@@ -1,7 +1,6 @@
 //! HCI Layer (where most the magic happens). Implements a Bluetooth Adapter for any controller
 //! supporting HCI streams.
 //! (HCI Layer is Little Endian).
-
 pub mod adapter;
 pub mod adapters;
 pub mod command;
@@ -19,6 +18,7 @@ pub mod usb;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Debug)]
 pub enum StreamError {
+    EventError(PackError),
     CommandError(PackError),
     UnsupportedPacketType(u8),
     BadOpcode,
@@ -27,11 +27,11 @@ pub enum StreamError {
     StreamClosed,
     StreamFailed,
 }
+use crate::bytes::ToFromBytesEndian;
+use crate::ConversionError;
 use crate::PackError;
 use core::convert::{TryFrom, TryInto};
 use core::fmt::Formatter;
-use driver_async::bytes::ToFromBytesEndian;
-use driver_async::ConversionError;
 
 pub const MAX_ACL_SIZE: usize = (1492 + 4);
 pub const MAX_SCO_SIZE: usize = 255;
