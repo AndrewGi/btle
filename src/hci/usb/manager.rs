@@ -1,4 +1,3 @@
-use crate::hci::usb::adapter::Adapter;
 use crate::hci::usb::{device, Error};
 use rusb::UsbContext;
 
@@ -28,11 +27,5 @@ impl Manager {
             .devices()
             .map(device::DeviceList::from)
             .map_err(Error::from)
-    }
-    pub fn open_adapter(&self, vendor_id: u16, product_id: u16) -> Result<Option<Adapter>, Error> {
-        self.context
-            .open_device_with_vid_pid(vendor_id, product_id)
-            .map(Adapter::from_handle)
-            .transpose()
     }
 }

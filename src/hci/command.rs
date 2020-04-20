@@ -7,7 +7,7 @@ use core::convert::TryFrom;
 
 /// Raw HCI Command Packet. Stores command [`Opcode`] and `parameters` (byte buffer).
 /// [`Opcode`]: crate::hci::Opcode;
-pub struct CommandPacket<Storage: AsRef<[u8]>> {
+pub struct CommandPacket<Storage> {
     pub opcode: Opcode,
     pub parameters: Storage,
 }

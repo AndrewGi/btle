@@ -26,9 +26,7 @@ pub enum StreamError {
     BadPacketCode,
     StreamClosed,
     StreamFailed,
-    IOError,
 }
-
 use crate::PackError;
 use core::convert::{TryFrom, TryInto};
 use core::fmt::Formatter;

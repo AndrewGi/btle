@@ -7,16 +7,9 @@ use crate::hci::{
     packet::RawPacket,
     stream::{HCIStreamable, Stream},
 };
-use core::fmt::Formatter;
 use core::pin::Pin;
-use driver_async::{bytes::Storage, error};
+use driver_async::bytes::Storage;
 
-impl core::fmt::Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-impl error::Error for Error {}
 pub struct Adapter<R: HCIStreamable> {
     pub stream: Stream<R>,
     _marker: (),

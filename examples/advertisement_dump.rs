@@ -54,6 +54,9 @@ pub fn dump_bluez(adapter_id: u16) -> Result<(), Box<dyn std::error::Error>> {
         Result::<(), Box<dyn std::error::Error>>::Ok(())
     })
 }
+pub async fn dump_usb(mut _adapter: btle::hci::usb::adapter::Adapter) {
+    unimplemented!()
+}
 pub async fn dump_adapter<S: btle::hci::stream::HCIStreamable>(
     mut adapter: btle::hci::adapters::Adapter<S>,
 ) -> Result<(), btle::le::adapter::Error> {

@@ -39,7 +39,7 @@ impl TryFrom<u8> for PacketType {
 }
 /// Raw HCI Packet. Stores the [`PacketType`] + packet data buf (bytes).
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct RawPacket<Buf: AsRef<[u8]>> {
+pub struct RawPacket<Buf> {
     pub packet_type: PacketType,
     pub buf: Buf,
 }
