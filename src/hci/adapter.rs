@@ -2,9 +2,9 @@ use crate::bytes::Storage;
 use crate::error::IOError;
 use crate::hci;
 use crate::hci::command::{Command, CommandPacket};
-use crate::hci::event::{CommandComplete, Event, EventPacket, ReturnParameters};
+use crate::hci::event::{Event, EventPacket, ReturnEvent};
 use crate::hci::stream::HCI_EVENT_READ_TRIES;
-use crate::hci::{Opcode, StreamError};
+use crate::hci::StreamError;
 use core::pin::Pin;
 use futures_util::future::LocalBoxFuture;
 
@@ -69,12 +69,12 @@ pub trait Adapter {
                 .await?;
             for _try_i in 0..HCI_EVENT_READ_TRIES {
                 let event: EventPacket<Buf> = self.as_mut().read_event::<Buf>().await?;
-                if event.event_code() == CommandComplete::<Cmd::Return>::EVENT_CODE {
-                    if Opcode::unpack(&event.parameters().as_ref()[1..3])
-                        .map_err(|_| StreamError::BadOpcode)?
-                        == Cmd::opcode()
+                if event.event_code() == Cmd::Return::EVENT_CODE {
+                    if Cmd::opcode()
+                        == Cmd::Return::guess_command_opcode(event.parameters())
+                            .map_err(StreamError::CommandError)?
                     {
-                        return Ok(Cmd::Return::unpack_from(event.parameters())
+                        return Ok(Cmd::Return::event_unpack_from(event.parameters())
                             .map_err(StreamError::CommandError)?);
                     }
                 }

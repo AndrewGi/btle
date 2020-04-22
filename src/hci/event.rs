@@ -359,6 +359,25 @@ impl<Params: ReturnParameters> Event for CommandComplete<Params> {
         Ok(())
     }
 }
+pub trait ReturnEvent: Event {
+    fn command_opcode(&self) -> Opcode;
+    fn guess_command_opcode(buf: &[u8]) -> Result<Opcode, PackError>;
+}
+impl<Params: ReturnParameters> ReturnEvent for CommandComplete<Params> {
+    fn command_opcode(&self) -> Opcode {
+        self.opcode
+    }
+    fn guess_command_opcode(buf: &[u8]) -> Result<Opcode, PackError> {
+        if buf.len() < 3 {
+            Err(PackError::BadLength {
+                expected: 3,
+                got: buf.len(),
+            })
+        } else {
+            Opcode::unpack(&buf[1..3])
+        }
+    }
+}
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct CommandStatus {
     pub status: ErrorCode,

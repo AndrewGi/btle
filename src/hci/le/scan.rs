@@ -1,7 +1,7 @@
 //! LE [`SetScanEnable`], [`SetScanParameters`], and other primitive scan types.
 use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
-use crate::hci::event::StatusReturn;
+use crate::hci::event::{CommandComplete, StatusReturn};
 use crate::hci::le::LEControllerOpcode;
 use crate::hci::Opcode;
 use crate::le::scan::ScanParameters;
@@ -16,7 +16,7 @@ impl SetScanEnable {
     pub const BYTE_LEN: usize = 2;
 }
 impl Command for SetScanEnable {
-    type Return = StatusReturn;
+    type Return = CommandComplete<StatusReturn>;
 
     fn opcode() -> Opcode {
         LEControllerOpcode::SetScanEnable.into()
@@ -65,7 +65,7 @@ impl SetScanParameters {
 }
 pub const SET_SCAN_PARAMETERS_LEN: usize = 7;
 impl Command for SetScanParameters {
-    type Return = StatusReturn;
+    type Return = CommandComplete<StatusReturn>;
 
     fn opcode() -> Opcode {
         LEControllerOpcode::SetScanParameters.into()

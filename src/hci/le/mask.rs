@@ -1,7 +1,7 @@
 //! LE [`SetEventMask`] and [`EventMask`] for dealing with LE event masks.
 use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
-use crate::hci::event::StatusReturn;
+use crate::hci::event::{CommandComplete, StatusReturn};
 use crate::hci::le::{LEControllerOpcode, MetaEventCode};
 use crate::hci::Opcode;
 use crate::ConversionError;
@@ -53,11 +53,10 @@ impl Default for MetaEventMask {
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-pub struct SetMetaEventMask {
-    pub mask: MetaEventMask,
-}
+pub struct SetMetaEventMask(pub MetaEventMask);
+
 impl Command for SetMetaEventMask {
-    type Return = StatusReturn;
+    type Return = CommandComplete<StatusReturn>;
 
     fn opcode() -> Opcode {
         LEControllerOpcode::SetEventMask.into()
@@ -69,7 +68,7 @@ impl Command for SetMetaEventMask {
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
         PackError::expect_length(MetaEventMask::BYTE_LEN, buf)?;
-        buf.copy_from_slice(&self.mask.0.to_bytes_le());
+        buf.copy_from_slice(&(self.0).0.to_bytes_le());
         Ok(())
     }
 
@@ -78,9 +77,9 @@ impl Command for SetMetaEventMask {
         Self: Sized,
     {
         PackError::expect_length(MetaEventMask::BYTE_LEN, buf)?;
-        Ok(SetMetaEventMask {
-            mask: MetaEventMask::try_from(u64::from_bytes_le(buf).expect("length checked above"))
+        Ok(SetMetaEventMask(
+            MetaEventMask::try_from(u64::from_bytes_le(buf).expect("length checked above"))
                 .map_err(|_| PackError::bad_index(0))?,
-        })
+        ))
     }
 }

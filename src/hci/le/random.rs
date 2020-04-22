@@ -1,6 +1,6 @@
 //! LE [`Rand`] command and return parameters.
 use crate::hci::command::Command;
-use crate::hci::event::ReturnParameters;
+use crate::hci::event::{CommandComplete, ReturnParameters};
 use crate::hci::le::LEControllerOpcode;
 use crate::hci::{ErrorCode, Opcode};
 use crate::PackError;
@@ -9,7 +9,7 @@ use core::convert::{TryFrom, TryInto};
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Default)]
 pub struct Rand {}
 impl Command for Rand {
-    type Return = RandReturn;
+    type Return = CommandComplete<RandReturn>;
 
     fn opcode() -> Opcode {
         LEControllerOpcode::Rand.into()

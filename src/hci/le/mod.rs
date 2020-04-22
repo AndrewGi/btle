@@ -6,6 +6,7 @@ pub mod report;
 pub use messages::*;
 pub mod random;
 pub mod scan;
+use crate::bytes::Storage;
 use crate::hci::event::{Event, EventCode, EventPacket};
 use crate::hci::{Opcode, OCF, OGF};
 use crate::ConversionError;
@@ -222,6 +223,12 @@ impl<Buf: AsRef<[u8]>> RawMetaEvent<Buf> {
         RawMetaEvent {
             code: self.code,
             parameters: self.parameters.as_ref(),
+        }
+    }
+    pub fn to_owned<NewBuf: Storage<u8>>(&self) -> RawMetaEvent<NewBuf> {
+        RawMetaEvent {
+            code: self.code,
+            parameters: NewBuf::from_slice(self.parameters.as_ref()),
         }
     }
 }

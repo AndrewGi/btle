@@ -1,7 +1,7 @@
 //! LE [`SetAdvertisingEnable`], [`SetAdvertisingData`] and other advertising types.
 use crate::bytes::ToFromBytesEndian;
 use crate::hci::command::Command;
-use crate::hci::event::{ReturnParameters, StatusReturn};
+use crate::hci::event::{CommandComplete, ReturnParameters, StatusReturn};
 use crate::hci::le::LEControllerOpcode;
 use crate::hci::{ErrorCode, Opcode};
 use crate::le::advertiser::{
@@ -18,7 +18,7 @@ pub struct SetAdvertisingEnable {
 }
 const SET_ADVERTISING_ENABLE_LEN: usize = 1;
 impl Command for SetAdvertisingEnable {
-    type Return = StatusReturn;
+    type Return = CommandComplete<StatusReturn>;
 
     fn opcode() -> Opcode {
         LEControllerOpcode::SetAdvertisingEnable.into()
@@ -54,7 +54,7 @@ pub struct SetAdvertisingData {
 }
 
 impl Command for SetAdvertisingData {
-    type Return = StatusReturn;
+    type Return = CommandComplete<StatusReturn>;
 
     fn opcode() -> Opcode {
         LEControllerOpcode::SetAdvertisingData.into()
@@ -96,7 +96,7 @@ impl SetAdvertisingData {
 #[derive(Copy, Clone, Debug)]
 pub struct SetAdvertisingParameters(pub AdvertisingParameters);
 impl Command for SetAdvertisingParameters {
-    type Return = StatusReturn;
+    type Return = CommandComplete<StatusReturn>;
 
     fn opcode() -> Opcode {
         LEControllerOpcode::SetAdvertisingParameters.into()
@@ -152,7 +152,7 @@ impl Command for SetAdvertisingParameters {
 
 pub struct ReadAdvertisingChannelTxPower {}
 impl Command for ReadAdvertisingChannelTxPower {
-    type Return = TxPowerLevelReturn;
+    type Return = CommandComplete<TxPowerLevelReturn>;
 
     fn opcode() -> Opcode {
         LEControllerOpcode::ReadAdvertisingChannelTxPower.into()

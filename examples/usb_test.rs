@@ -28,9 +28,9 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = device.open()?;
     println!("got adapter! {:?}", adapter);
     let mut adapter = Adapter::pin(&mut adapter);
-    /// Read the HCI Capabilities (always first event)
+    // Read the HCI Capabilities (always first event)
     adapter.hci_read_event::<Box<[u8]>>().await?;
-    /// Reset the HCI Adapter
+    // Reset the HCI Adapter
     adapter.reset().await?;
     let mut event_stream = adapter.hci_event_stream::<Box<[u8]>>();
     let mut event_stream = unsafe { core::pin::Pin::new_unchecked(&mut event_stream) };

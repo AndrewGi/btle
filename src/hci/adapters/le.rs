@@ -1,4 +1,7 @@
 use crate::hci::adapters::Adapter;
+use crate::hci::baseband::{EventMask, EventMaskFlags};
+use crate::hci::le::mask::{MetaEventMask, SetMetaEventMask};
+use crate::hci::le::MetaEventCode;
 use crate::{
     bytes::Storage,
     hci::{
@@ -26,6 +29,9 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
     pub fn new(adapter: Adapter<A, S>) -> Self {
         Self { adapter }
     }
+    pub fn adapter_mut(&mut self) -> Adapter<A, &'_ mut A> {
+        self.adapter.as_mut()
+    }
     /// Read the advertising channel TX power in dBm. See [`le::advertise::TxPowerLevel`] for more.
     pub async fn get_advertising_tx_power(
         &mut self,
@@ -34,8 +40,8 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
             .adapter
             .hci_send_command(le::commands::ReadAdvertisingChannelTxPower {})
             .await?;
-        r.status.error()?;
-        Ok(r.power_level)
+        r.params.status.error()?;
+        Ok(r.params.power_level)
     }
     /// Set advertisement scanning enable/disable. [`LEAdapter::set_scan_parameters`] should be
     /// called first to set any scanning parameters (how long, what type of advertisements, etc).
@@ -50,6 +56,7 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
                 filter_duplicates,
             })
             .await?
+            .params
             .status
             .error()?;
         Ok(())
@@ -62,6 +69,7 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
         self.adapter
             .hci_send_command(le::scan::SetScanParameters(scan_parameters))
             .await?
+            .params
             .status
             .error()?;
         Ok(())
@@ -73,6 +81,7 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
         self.adapter
             .hci_send_command(le::commands::SetAdvertisingEnable { is_enabled })
             .await?
+            .params
             .status
             .error()?;
         Ok(())
@@ -85,6 +94,7 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
         self.adapter
             .hci_send_command(le::commands::SetAdvertisingParameters(parameters))
             .await?
+            .params
             .status
             .error()?;
         Ok(())
@@ -92,8 +102,17 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
     /// Get `RAND_LEN` (8) bytes from the HCI Controller.
     pub async fn get_rand(&mut self) -> Result<[u8; RAND_LEN], adapter::Error> {
         let r = self.adapter.hci_send_command(le::commands::Rand {}).await?;
-        r.status.error()?;
-        Ok(r.random_bytes)
+        r.params.status.error()?;
+        Ok(r.params.random_bytes)
+    }
+    pub async fn set_meta_event_mask(&mut self, mask: MetaEventMask) -> Result<(), adapter::Error> {
+        self.adapter
+            .hci_send_command(SetMetaEventMask(mask))
+            .await?
+            .params
+            .status
+            .error()?;
+        Ok(())
     }
     /// Set advertising data (0-31 bytes).
     /// # Errors
@@ -105,43 +124,75 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
         self.adapter
             .hci_send_command(le::commands::SetAdvertisingData::new(data))
             .await?
+            .params
             .status
             .error()?;
         Ok(())
     }
-
-    pub fn advertising_report_stream<'a, 'b: 'a, Buf: Storage<ReportInfo<StaticAdvBuffer>> + 'b>(
+    pub async fn meta_event_stream<'a, 'b: 'a, Buf: Storage<u8> + 'b>(
         &'a mut self,
-    ) -> impl Stream<Item = Result<AdvertisingReport<Buf>, adapter::Error>> + 'a {
-        self.adapter.hci_event_stream().filter_map(
-            |p: Result<EventPacket<Box<[u8]>>, adapter::Error>| async move {
+    ) -> Result<impl Stream<Item = Result<RawMetaEvent<Buf>, adapter::Error>> + 'a, adapter::Error>
+    {
+        let mut mask = EventMask::zeroed();
+        mask.enable_event(EventMaskFlags::LEMetaEvent);
+        self.adapter.set_event_mask(mask).await?;
+        Ok(self.adapter.hci_event_stream().filter_map(
+            |p: Result<EventPacket<Buf>, adapter::Error>| async move {
                 let event = match p {
                     Ok(event) => event,
                     Err(e) => return Some(Err(e)),
                 };
                 // Ignore all non-LEMeta HCI Events
                 if event.event_code == EventCode::LEMeta {
-                    Some(|| -> Result<AdvertisingReport<Buf>, adapter::Error> {
-                        let meta_event = RawMetaEvent::try_from(event.as_ref())
-                            .map_err(StreamError::EventError)?;
-                        // We expect only AdvertisingReport Meta events to get through because the HCI
-                        // filter should be set for that. Otherwise if a non-`AdvertisingReport`
-                        // packet gets through, this will return `PackError::BadOpcode` because
-                        // an LEMeta event with an Event Code of anything but `AdvertisingReport` got
-                        // through.
-                        Ok(AdvertisingReport::meta_unpack_packet(meta_event.as_ref())
-                            .map_err(StreamError::EventError)?)
-                    }())
+                    let meta_event = RawMetaEvent::try_from(event.as_ref())
+                        .map_err(|e| adapter::Error::StreamError(StreamError::EventError(e)));
+                    Some(meta_event.map(|e| e.to_owned()))
                 } else {
                     None
                 }
             },
-        )
+        ))
     }
-    pub fn advertisement_stream<'a, 'b: 'a, Buf: Storage<ReportInfo<StaticAdvBuffer>> + 'b>(
+    pub async fn advertising_report_stream<
+        'a,
+        'b: 'a,
+        Buf: Storage<ReportInfo<StaticAdvBuffer>> + 'b,
+    >(
         &'a mut self,
-    ) -> impl Stream<Item = Result<ReportInfo<StaticAdvBuffer>, adapter::Error>> + 'a {
-        self.advertising_report_stream::<Buf>()
+    ) -> Result<
+        impl Stream<Item = Result<AdvertisingReport<Buf>, adapter::Error>> + 'a,
+        adapter::Error,
+    > {
+        let mut mask = MetaEventMask::zeroed();
+        mask.enable_event(MetaEventCode::AdvertisingReport);
+        self.set_meta_event_mask(mask).await?;
+        Ok(self.meta_event_stream().await?.filter_map(
+            |meta_event: Result<RawMetaEvent<Box<[u8]>>, adapter::Error>| async move {
+                // We expect only AdvertisingReport Meta events to get through because the HCI
+                // filter should be set for that. Otherwise if a non-`AdvertisingReport`
+                // packet gets through, this will return `PackError::BadOpcode` because
+                // an LEMeta event with an Event Code of anything but `AdvertisingReport` got
+                // through.
+                Some(meta_event.and_then(|event| {
+                    AdvertisingReport::meta_unpack_packet(event.as_ref().as_ref())
+                        .map_err(|e| adapter::Error::StreamError(StreamError::EventError(e)))
+                }))
+            },
+        ))
+    }
+    pub async fn advertisement_stream<
+        'a,
+        'b: 'a,
+        Buf: Storage<ReportInfo<StaticAdvBuffer>> + 'b,
+    >(
+        &'a mut self,
+    ) -> Result<
+        impl Stream<Item = Result<ReportInfo<StaticAdvBuffer>, adapter::Error>> + 'a,
+        adapter::Error,
+    > {
+        Ok(self
+            .advertising_report_stream::<Buf>()
+            .await?
             .map(
                 |r: Result<AdvertisingReport<Buf>, adapter::Error>| match r {
                     Ok(report) => futures_util::future::Either::Left(
@@ -152,7 +203,7 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
                     )),
                 },
             )
-            .flatten()
+            .flatten())
     }
 }
 

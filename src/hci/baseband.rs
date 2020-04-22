@@ -33,7 +33,7 @@ impl Reset {
     pub const OPCODE: ControllerBasebandOpcode = ControllerBasebandOpcode::Reset;
 }
 impl Command for Reset {
-    type Return = StatusReturn;
+    type Return = CommandComplete<StatusReturn>;
 
     fn opcode() -> Opcode {
         Self::OPCODE.into()
@@ -55,9 +55,95 @@ impl Command for Reset {
         Ok(Reset)
     }
 }
-#[derive(Copy, Clone, Eq, Hash, Debug, PartialEq, Default)]
+pub enum EventMaskFlags {
+    InquiryComplete = 0x00,
+    InquiryResult = 0x01,
+    ConnectionComplete = 0x02,
+    ConnectionRequest = 0x03,
+    DisconnectionComplete = 0x04,
+    AuthenticationComplete = 0x05,
+    RemoteNameRequestComplete = 0x06,
+    EncryptionChange = 0x07,
+    ChangeConnectionLinkKeyComplete = 0x08,
+    MasterLinkKeyComplete = 0x09,
+    ReadRemoteSupportedFeaturesComplete = 0x0A,
+    ReadRemoteVersionInformationComplete = 0x0B,
+    QoSSetupComplete = 0x0C,
+    // 13, 14 are skipped
+    HardwareError = 0x0F,
+    FlushOccurred = 0x10,
+    RoleChanged = 0x11,
+    // 18 skipped
+    ModeChange = 0x13,
+    ReturnLinkKey = 0x14,
+    PinCodeRequest = 0x15,
+    LinkKeyRequest = 0x16,
+    LinkKeyNotification = 0x17,
+    LoopbackCommand = 0x18,
+    DataBufferOverflow = 0x19,
+    MaxSlotsChanged = 0x1A,
+    ReadClockOffsetComplete = 0x1B,
+    ConnectionPacketTypeChanged = 0x1C,
+    QoSViolation = 0x1D,
+    PageScanModeChange = 0x1E, // Deprecated
+    PageScanRepetitionModeChange = 0x1F,
+    FlowSpecificationComplete = 0x20,
+    InquiryResultWithRSSI = 0x21,
+    ReadRemoteExtendedFeaturesComplete = 0x22,
+    // 35-42 Skipped
+    SynchronousConnectionCompleted = 0x2B,
+    SynchronousConnectionChanged = 0x2C,
+    SniffSubrating = 0x2D,
+    ExtendedInquiryResult = 0x2E,
+    EncryptionKeyRefreshComplete = 0x2F,
+    IOCapabilityRequest = 0x30,
+    IOCapabilityResponse = 0x31,
+    UserConfirmationRequest = 0x32,
+    UserPasskeyRequest = 0x33,
+    RemoteOOBDataRequest = 0x34,
+    SimplePairingComplete = 0x35,
+    // 54 skipped
+    LinkSupervisionTimeoutChanged = 0x37,
+    EnhancedFlushComplete = 0x38,
+    // 57 skipped
+    UserPasskeyNotification = 0x3A,
+    KeypressNotification = 0x3B,
+    RemoteHouseSupportedFeaturesNotification = 0x3C,
+    LEMetaEvent = 0x3D,
+}
+#[derive(Copy, Clone, Eq, Hash, Debug, PartialEq)]
 pub struct EventMask(pub u64);
-
+impl From<EventMaskFlags> for u8 {
+    fn from(f: EventMaskFlags) -> Self {
+        f as u8
+    }
+}
+impl From<EventMaskFlags> for u64 {
+    fn from(f: EventMaskFlags) -> Self {
+        f as u64
+    }
+}
+impl EventMask {
+    pub const DEFAULT: EventMask = EventMask(0x0000_1FFF_FFFF_FFFF);
+    pub const ZEROED: EventMask = EventMask(0);
+    pub const fn zeroed() -> EventMask {
+        EventMask::ZEROED
+    }
+    pub fn enable_event(&mut self, flag: EventMaskFlags) {
+        self.0 |= 1 << u64::from(flag);
+    }
+    pub fn disable_event(&mut self, flag: EventMaskFlags) {
+        self.0 &= !(1 << u64::from(flag));
+    }
+    pub fn get_event(&mut self, flag: EventMaskFlags) -> bool {
+        self.0 & (1 << u64::from(flag)) != 0
+    }
+}
+impl Default for EventMask {
+    fn default() -> Self {
+        EventMask::DEFAULT
+    }
+}
 #[derive(Copy, Clone, Eq, Hash, Debug, PartialEq, Default)]
 pub struct SetEventMask(pub EventMask);
 
@@ -66,7 +152,7 @@ impl SetEventMask {
     pub const OPCODE: ControllerBasebandOpcode = ControllerBasebandOpcode::SetEventMask;
 }
 impl Command for SetEventMask {
-    type Return = StatusReturn;
+    type Return = CommandComplete<StatusReturn>;
 
     fn opcode() -> Opcode {
         Self::OPCODE.into()

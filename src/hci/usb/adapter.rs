@@ -2,17 +2,16 @@ use crate::bytes::Storage;
 use crate::error::IOError;
 use crate::hci;
 use crate::hci::command::{Command, CommandPacket};
-use crate::hci::event::{Event, EventCode, EventPacket, ReturnParameters, StaticEventBuffer};
+use crate::hci::event::{Event, EventCode, EventPacket, ReturnEvent, StaticEventBuffer};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::stream::HCI_EVENT_READ_TRIES;
 use crate::hci::usb::device::{Device, DeviceIdentifier};
 use crate::hci::usb::Error;
-use crate::hci::{Opcode, StreamError};
+use crate::hci::StreamError;
 use core::convert::TryFrom;
 use core::pin::Pin;
 use core::time::Duration;
 use futures_util::future::LocalBoxFuture;
-use hci::event::CommandComplete;
 
 pub const HCI_COMMAND_ENDPOINT: u8 = 0x01;
 pub const ACL_DATA_OUT_ENDPOINT: u8 = 0x02;
@@ -169,12 +168,13 @@ impl Adapter {
             let len = usize::from(header[1]);
             self.read_event_bytes(buf[..len].as_mut())?;
             let event = EventPacket::new(event_code, &buf[..len]);
-            if event.event_code() == CommandComplete::<Cmd::Return>::EVENT_CODE {
-                if Opcode::unpack(&event.parameters().as_ref()[1..3])
-                    .map_err(|_| StreamError::BadOpcode)?
-                    == Cmd::opcode()
+
+            if event.event_code() == Cmd::Return::EVENT_CODE {
+                if Cmd::opcode()
+                    == Cmd::Return::guess_command_opcode(event.parameters())
+                        .map_err(StreamError::CommandError)?
                 {
-                    return Ok(Cmd::Return::unpack_from(event.parameters())
+                    return Ok(Cmd::Return::event_unpack_from(event.parameters())
                         .map_err(StreamError::CommandError)?);
                 }
             }

@@ -3,7 +3,7 @@
 use crate::bytes::Storage;
 use crate::error;
 use crate::hci::command::Command;
-use crate::hci::event::{CommandComplete, Event, EventCode, EventPacket};
+use crate::hci::event::{Event, EventCode, EventPacket};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{Opcode, StreamError, FULL_COMMAND_MAX_LEN};
 use crate::PackError;
@@ -159,7 +159,7 @@ impl<S: HCIReader> Stream<S> {
     pub async fn send_command<Cmd: Command>(
         mut self: Pin<&mut Self>,
         command: Cmd,
-    ) -> Result<CommandComplete<Cmd::Return>, StreamError>
+    ) -> Result<Cmd::Return, StreamError>
     where
         S: HCIWriter + HCIFilterable,
     {
@@ -178,8 +178,8 @@ impl<S: HCIReader> Stream<S> {
         filter.enable_event(EventCode::CommandComplete);
         filter.enable_event(EventCode::LEMeta);
 
-        filter.enable_event(CommandComplete::<Cmd::Return>::EVENT_CODE);
-        if !filter.get_event(CommandComplete::<Cmd::Return>::EVENT_CODE) {
+        filter.enable_event(Cmd::Return::EVENT_CODE);
+        if !filter.get_event(Cmd::Return::EVENT_CODE) {
             return Err(StreamError::BadEventCode);
         }
         *filter.opcode_mut() = Cmd::opcode();
@@ -195,10 +195,10 @@ impl<S: HCIReader> Stream<S> {
         for _try_i in 0..HCI_EVENT_READ_TRIES {
             // Reuse `buf` to read the RawPacket
             let event = EventPacket::try_from(self.as_mut().read_packet(&mut buf[..]).await?)?;
-            if event.event_code() == CommandComplete::<Cmd::Return>::EVENT_CODE {
+            if event.event_code() == Cmd::Return::EVENT_CODE {
                 if Opcode::unpack(&event.parameters().as_ref()[1..3])? == Cmd::opcode() {
                     self.stream_pinned().set_filter(&old_filter)?;
-                    return CommandComplete::event_unpack_from(event.parameters())
+                    return Cmd::Return::event_unpack_from(event.parameters())
                         .map_err(StreamError::CommandError);
                 }
             }

@@ -3,10 +3,10 @@ pub mod le;
 
 use crate::bytes::Storage;
 use crate::hci::adapter;
+use crate::hci::adapters::le::LEAdapter;
 use crate::hci::baseband::{EventMask, Reset, SetEventMask};
 use crate::hci::command::Command;
 use crate::hci::event::EventPacket;
-use crate::hci::le::mask::{MetaEventMask, SetMetaEventMask};
 use crate::Stream;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
@@ -40,6 +40,12 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> Adapter<A, S> {
             adapter: self.adapter.as_mut(),
         }
     }
+    pub fn le(self) -> le::LEAdapter<A, S> {
+        LEAdapter::new(self)
+    }
+    pub fn le_mut(&mut self) -> le::LEAdapter<A, &'_ mut A> {
+        LEAdapter::new(self.as_mut())
+    }
     pub async fn hci_send_command<'a, 'c: 'a, Cmd: Command + 'c>(
         &mut self,
         cmd: Cmd,
@@ -54,7 +60,6 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> Adapter<A, S> {
     pub fn hci_event_stream<'a, 'b: 'a, Buf: Storage<u8> + 'b>(
         &'a mut self,
     ) -> impl Stream<Item = Result<EventPacket<Buf>, adapter::Error>> + 'a {
-        todo!("set HCI Filter to AdvertisingReport");
         futures_util::stream::unfold(self, move |s| async move {
             Some((s.adapter.as_mut().read_event().await, s))
         })
@@ -62,12 +67,13 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> Adapter<A, S> {
     pub async fn set_event_mask(&mut self, mask: EventMask) -> Result<(), adapter::Error> {
         self.hci_send_command(SetEventMask(mask))
             .await?
+            .params
             .status
             .error()?;
         Ok(())
     }
     pub async fn reset(&mut self) -> Result<(), adapter::Error> {
-        self.hci_send_command(Reset).await?.status.error()?;
+        self.hci_send_command(Reset).await?.params.status.error()?;
         Ok(())
     }
 }

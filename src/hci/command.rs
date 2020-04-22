@@ -1,10 +1,11 @@
 //! HCI Command and command utilities.
 use crate::bytes::Storage;
-use crate::hci::event::ReturnParameters;
+use crate::hci::event::ReturnEvent;
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{Opcode, OPCODE_LEN};
 use crate::PackError;
 use core::convert::TryFrom;
+use std::convert::TryInto;
 
 /// Raw HCI Command Packet. Stores command [`Opcode`] and `parameters` (byte buffer).
 /// [`Opcode`]: crate::hci::Opcode;
@@ -20,12 +21,14 @@ impl<Buf: AsRef<[u8]>> CommandPacket<Buf> {
         }
     }
     pub fn to_raw_packet<NewStorage: Storage<u8>>(&self) -> RawPacket<NewStorage> {
-        let len = self.parameters.as_ref().len() + OPCODE_LEN;
+        let para_len = self.parameters.as_ref().len();
+        let len = para_len + 1 + OPCODE_LEN;
         let mut buf = NewStorage::with_size(len);
-        buf.as_mut()[OPCODE_LEN..].copy_from_slice(self.parameters.as_ref());
+        buf.as_mut()[OPCODE_LEN + 1..].copy_from_slice(self.parameters.as_ref());
         self.opcode
             .pack(&mut buf.as_mut()[..OPCODE_LEN])
             .expect("given a hardcoded length buf");
+        buf.as_mut()[2] = para_len.try_into().expect("len bigger than an u8");
         RawPacket {
             packet_type: PacketType::Command,
             buf,
@@ -38,7 +41,7 @@ pub struct CommandHeader {
 }
 /// HCI Command trait for structs that are HCI commands.
 pub trait Command {
-    type Return: ReturnParameters;
+    type Return: ReturnEvent;
     fn opcode() -> Opcode;
     fn full_len(&self) -> usize {
         self.byte_len() + OPCODE_LEN + 1
