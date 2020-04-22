@@ -1,22 +1,34 @@
 //! HCI Command and command utilities.
 use crate::bytes::Storage;
 use crate::hci::event::ReturnParameters;
-use crate::hci::packet::PacketType;
+use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{Opcode, OPCODE_LEN};
 use crate::PackError;
 use core::convert::TryFrom;
 
 /// Raw HCI Command Packet. Stores command [`Opcode`] and `parameters` (byte buffer).
 /// [`Opcode`]: crate::hci::Opcode;
-pub struct CommandPacket<Storage> {
+pub struct CommandPacket<Buf> {
     pub opcode: Opcode,
-    pub parameters: Storage,
+    pub parameters: Buf,
 }
-impl<Storage: AsRef<[u8]>> CommandPacket<Storage> {
+impl<Buf: AsRef<[u8]>> CommandPacket<Buf> {
     pub fn as_ref(&self) -> CommandPacket<&[u8]> {
         CommandPacket {
             opcode: self.opcode,
             parameters: self.parameters.as_ref(),
+        }
+    }
+    pub fn to_raw_packet<NewStorage: Storage<u8>>(&self) -> RawPacket<NewStorage> {
+        let len = self.parameters.as_ref().len() + OPCODE_LEN;
+        let mut buf = NewStorage::with_size(len);
+        buf.as_mut()[OPCODE_LEN..].copy_from_slice(self.parameters.as_ref());
+        self.opcode
+            .pack(&mut buf.as_mut()[..OPCODE_LEN])
+            .expect("given a hardcoded length buf");
+        RawPacket {
+            packet_type: PacketType::Command,
+            buf,
         }
     }
 }
@@ -32,6 +44,10 @@ pub trait Command {
         self.byte_len() + OPCODE_LEN + 1
     }
     fn byte_len(&self) -> usize;
+    /// Pack the command parameters into a byte buffer.
+    /// !! `buf.len() == Command.byte_len()` otherwise will return `PackError::BadLength` !!
+    /// # Errors
+    ///
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
     fn pack_full(&self, buf: &mut [u8]) -> Result<usize, PackError> {
         let full = self.full_len();

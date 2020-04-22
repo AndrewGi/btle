@@ -1,16 +1,18 @@
 use crate::bytes::Storage;
 use crate::error::IOError;
 use crate::hci;
-use crate::hci::command::Command;
-use crate::hci::event::{Event, EventCode, EventPacket, ReturnParameters};
+use crate::hci::command::{Command, CommandPacket};
+use crate::hci::event::{Event, EventCode, EventPacket, ReturnParameters, StaticEventBuffer};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::stream::HCI_EVENT_READ_TRIES;
 use crate::hci::usb::device::{Device, DeviceIdentifier};
 use crate::hci::usb::Error;
 use crate::hci::{Opcode, StreamError};
+use core::convert::TryFrom;
+use core::pin::Pin;
 use core::time::Duration;
+use futures_util::future::LocalBoxFuture;
 use hci::event::CommandComplete;
-use std::convert::TryFrom;
 
 pub const HCI_COMMAND_ENDPOINT: u8 = 0x01;
 pub const ACL_DATA_OUT_ENDPOINT: u8 = 0x02;
@@ -201,5 +203,24 @@ impl Drop for Adapter {
     fn drop(&mut self) {
         // We claim the interface when we make the adapter so we must release when we drop.
         let _ = self.handle.release_interface(INTERFACE_NUM);
+    }
+}
+
+impl hci::adapter::Adapter for Adapter {
+    fn write_command(
+        mut self: Pin<&mut Self>,
+        packet: CommandPacket<&[u8]>,
+    ) -> LocalBoxFuture<'_, Result<(), hci::adapter::Error>> {
+        let packed = packet.to_raw_packet::<StaticEventBuffer>();
+        Box::pin(async move {
+            self.write_hci_command_bytes(packed.buf.as_ref())
+                .map_err(hci::adapter::Error::from)
+        })
+    }
+
+    fn read_event<S: Storage<u8>>(
+        mut self: Pin<&mut Self>,
+    ) -> LocalBoxFuture<'_, Result<EventPacket<S>, hci::adapter::Error>> {
+        Box::pin(async move { self.read_event_packet().map_err(hci::adapter::Error::from) })
     }
 }

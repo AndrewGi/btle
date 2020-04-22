@@ -9,7 +9,7 @@ pub mod commands {
     pub use super::scan::SetScanEnable;
     pub use super::scan::SetScanParameters;
 
-    pub use super::mask::SetEventMask;
+    pub use super::mask::SetMetaEventMask;
 
     pub use super::random::Rand;
 }

@@ -1,9 +1,9 @@
-use crate::asyncs::stream::StreamExt;
 use btle::hci::adapters::le::AdvertisementStream;
 use btle::hci::event::EventCode;
 use btle::hci::packet::PacketType;
 use btle::le;
 use btle::le::report::ReportInfo;
+use futures_util::stream::StreamExt;
 #[allow(unused_imports)]
 use std::convert::{TryFrom, TryInto};
 use std::pin::Pin;
@@ -57,11 +57,11 @@ pub fn dump_bluez(adapter_id: u16) -> Result<(), Box<dyn std::error::Error>> {
 pub async fn dump_usb(mut _adapter: btle::hci::usb::adapter::Adapter) {
     unimplemented!()
 }
-pub async fn dump_adapter<S: btle::hci::stream::HCIStreamable>(
-    mut adapter: btle::hci::adapters::Adapter<S>,
-) -> Result<(), btle::le::adapter::Error> {
-    let mut adapter = Pin::new(&mut adapter);
-    let mut le = adapter.as_mut().le();
+pub async fn dump_adapter<A: btle::hci::adapter::Adapter + Unpin>(
+    mut adapter: A,
+) -> Result<(), btle::hci::adapter::Error> {
+    let mut adapter = btle::hci::adapters::le::LEAdapter::new(Pin::new(&mut adapter));
+
     // Set BLE Scan parameters (when to scan, how long, etc)
     le.set_scan_parameters(le::scan::ScanParameters::DEFAULT)
         .await?;

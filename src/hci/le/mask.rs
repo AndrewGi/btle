@@ -9,16 +9,16 @@ use crate::PackError;
 use core::convert::TryFrom;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct EventMask(u64);
-impl EventMask {
-    const DEFAULT: EventMask = EventMask(0x1F);
-    const ZEROED: EventMask = EventMask(0);
+pub struct MetaEventMask(u64);
+impl MetaEventMask {
+    const DEFAULT: MetaEventMask = MetaEventMask(0x1F);
+    const ZEROED: MetaEventMask = MetaEventMask(0);
     const BYTE_LEN: usize = 8;
-    pub const fn zeroed() -> EventMask {
+    pub const fn zeroed() -> MetaEventMask {
         Self::ZEROED
     }
-    pub fn new(mask: u64) -> EventMask {
-        EventMask(mask)
+    pub fn new(mask: u64) -> MetaEventMask {
+        MetaEventMask(mask)
     }
     pub fn enable_event(&mut self, event: MetaEventCode) {
         self.0 |= 1u64 << Self::event_pos(event)
@@ -33,30 +33,30 @@ impl EventMask {
         self.0 & (1u64 << Self::event_pos(event)) != 0
     }
 }
-impl From<EventMask> for u64 {
-    fn from(m: EventMask) -> Self {
+impl From<MetaEventMask> for u64 {
+    fn from(m: MetaEventMask) -> Self {
         m.0
     }
 }
-impl TryFrom<u64> for EventMask {
+impl TryFrom<u64> for MetaEventMask {
     type Error = ConversionError;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         // Might do validity checking of the bits.
-        Ok(EventMask(value))
+        Ok(MetaEventMask(value))
     }
 }
-impl Default for EventMask {
+impl Default for MetaEventMask {
     fn default() -> Self {
         Self::DEFAULT
     }
 }
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-pub struct SetEventMask {
-    pub mask: EventMask,
+pub struct SetMetaEventMask {
+    pub mask: MetaEventMask,
 }
-impl Command for SetEventMask {
+impl Command for SetMetaEventMask {
     type Return = StatusReturn;
 
     fn opcode() -> Opcode {
@@ -64,11 +64,11 @@ impl Command for SetEventMask {
     }
 
     fn byte_len(&self) -> usize {
-        EventMask::BYTE_LEN
+        MetaEventMask::BYTE_LEN
     }
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
-        PackError::expect_length(EventMask::BYTE_LEN, buf)?;
+        PackError::expect_length(MetaEventMask::BYTE_LEN, buf)?;
         buf.copy_from_slice(&self.mask.0.to_bytes_le());
         Ok(())
     }
@@ -77,9 +77,9 @@ impl Command for SetEventMask {
     where
         Self: Sized,
     {
-        PackError::expect_length(EventMask::BYTE_LEN, buf)?;
-        Ok(SetEventMask {
-            mask: EventMask::try_from(u64::from_bytes_le(buf).expect("length checked above"))
+        PackError::expect_length(MetaEventMask::BYTE_LEN, buf)?;
+        Ok(SetMetaEventMask {
+            mask: MetaEventMask::try_from(u64::from_bytes_le(buf).expect("length checked above"))
                 .map_err(|_| PackError::bad_index(0))?,
         })
     }

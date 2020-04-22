@@ -1,5 +1,7 @@
 use btle::error::IOError;
+use btle::hci::adapters::Adapter;
 use btle::hci::usb;
+use futures_util::StreamExt;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = tokio::runtime::Builder::new()
@@ -25,8 +27,15 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     println!("using {:?}", device);
     let mut adapter = device.open()?;
     println!("got adapter! {:?}", adapter);
-    loop {
-        let packet = adapter.read_event_packet::<Box<[u8]>>()?;
-        println!("got event! {:?}", packet);
+    let mut adapter = Adapter::pin(&mut adapter);
+    /// Read the HCI Capabilities (always first event)
+    adapter.hci_read_event::<Box<[u8]>>().await?;
+    /// Reset the HCI Adapter
+    adapter.reset().await?;
+    let mut event_stream = adapter.hci_event_stream::<Box<[u8]>>();
+    let mut event_stream = unsafe { core::pin::Pin::new_unchecked(&mut event_stream) };
+    while let Some(event) = event_stream.next().await {
+        println!("got event! {:?}", event);
     }
+    Ok(())
 }
