@@ -1,8 +1,5 @@
-use crate::error::Error;
-use crate::hci::adapter;
-use crate::le::report::ReportInfo;
 use crate::ConversionError;
-use crate::{BoxFuture, BoxStream};
+
 use core::convert::TryFrom;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -157,7 +154,7 @@ impl Default for ScanParameters {
         Self::DEFAULT
     }
 }
-
+/*
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum ObserverError {
     AdapterError(adapter::Error),
@@ -175,3 +172,4 @@ pub trait Observer {
     ) -> BoxFuture<'a, Result<(), adapter::Error>>;
     fn advertisement_stream<'a>(&'a mut self) -> BoxStream<'a, Result<ReportInfo, adapter::Error>>;
 }
+*/

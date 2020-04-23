@@ -2,7 +2,7 @@ use crate::bytes::Storage;
 use crate::error::IOError;
 use crate::hci;
 use crate::hci::command::{Command, CommandPacket};
-use crate::hci::event::{Event, EventPacket, ReturnEvent};
+use crate::hci::event::EventPacket;
 use crate::hci::stream::HCI_EVENT_READ_TRIES;
 use crate::hci::StreamError;
 use core::pin::Pin;
@@ -56,7 +56,6 @@ pub trait Adapter {
         command: Cmd,
     ) -> LocalBoxFuture<'_, Result<Cmd::Return, hci::adapter::Error>> {
         Box::pin(async move {
-            const BUF_LEN: usize = 0xFF + 2 + 1;
             type Buf = Box<[u8]>;
             // Pack Command
             self.as_mut()
@@ -69,14 +68,11 @@ pub trait Adapter {
                 .await?;
             for _try_i in 0..HCI_EVENT_READ_TRIES {
                 let event: EventPacket<Buf> = self.as_mut().read_event::<Buf>().await?;
-                if event.event_code() == Cmd::Return::EVENT_CODE {
-                    if Cmd::opcode()
-                        == Cmd::Return::guess_command_opcode(event.parameters())
-                            .map_err(StreamError::CommandError)?
-                    {
-                        return Ok(Cmd::Return::event_unpack_from(event.parameters())
-                            .map_err(StreamError::CommandError)?);
-                    }
+                dbg!(&event);
+                if let Some(ret) =
+                    Cmd::unpack_return(event.as_ref()).map_err(StreamError::EventError)?
+                {
+                    return Ok(ret);
                 }
             }
             Err(hci::adapter::Error::StreamError(StreamError::StreamFailed))

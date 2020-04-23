@@ -138,7 +138,7 @@ pub trait HCIReader: Unpin {
 pub struct Stream<S: HCIReader> {
     pub stream: S,
 }
-pub const HCI_EVENT_READ_TRIES: usize = 10;
+pub const HCI_EVENT_READ_TRIES: usize = 20;
 impl<S: HCIReader> Stream<S> {
     pub fn new(stream: S) -> Self {
         Self { stream }

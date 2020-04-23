@@ -1,13 +1,11 @@
 use crate::bytes::Storage;
 use crate::error::IOError;
 use crate::hci;
-use crate::hci::command::{Command, CommandPacket};
-use crate::hci::event::{Event, EventCode, EventPacket, ReturnEvent, StaticEventBuffer};
+use crate::hci::command::CommandPacket;
+use crate::hci::event::{EventCode, EventPacket, StaticEventBuffer};
 use crate::hci::packet::{PacketType, RawPacket};
-use crate::hci::stream::HCI_EVENT_READ_TRIES;
 use crate::hci::usb::device::{Device, DeviceIdentifier};
 use crate::hci::usb::Error;
-use crate::hci::StreamError;
 use core::convert::TryFrom;
 use core::pin::Pin;
 use core::time::Duration;
@@ -147,39 +145,6 @@ impl Adapter {
             event_code,
             parameters: buf,
         })
-    }
-    fn send_hci_command<Cmd: Command>(
-        &mut self,
-        command: Cmd,
-    ) -> Result<Cmd::Return, hci::adapter::Error> {
-        const BUF_LEN: usize = 0xFF + 2 + 1;
-        let mut buf = [0_u8; BUF_LEN];
-        // Pack Command
-        let len = command
-            .pack_full(&mut buf[..])
-            .map_err(StreamError::CommandError)?;
-        self.write_hci_command_bytes(&buf[..len])?;
-        for _try_i in 0..HCI_EVENT_READ_TRIES {
-            // Reuse `buf` to read the RawPacket
-            let mut header = [0u8; 2];
-            self.read_event_bytes(&mut header[..])?;
-            let event_code =
-                EventCode::try_from(header[0]).map_err(|_| hci::StreamError::BadEventCode)?;
-            let len = usize::from(header[1]);
-            self.read_event_bytes(buf[..len].as_mut())?;
-            let event = EventPacket::new(event_code, &buf[..len]);
-
-            if event.event_code() == Cmd::Return::EVENT_CODE {
-                if Cmd::opcode()
-                    == Cmd::Return::guess_command_opcode(event.parameters())
-                        .map_err(StreamError::CommandError)?
-                {
-                    return Ok(Cmd::Return::event_unpack_from(event.parameters())
-                        .map_err(StreamError::CommandError)?);
-                }
-            }
-        }
-        Err(hci::adapter::Error::StreamError(StreamError::StreamFailed))
     }
     pub fn write_packet(&mut self, packet: RawPacket<&[u8]>) -> Result<(), Error> {
         // TODO: change this API to safer error handling

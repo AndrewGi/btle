@@ -361,20 +361,17 @@ impl<Params: ReturnParameters> Event for CommandComplete<Params> {
 }
 pub trait ReturnEvent: Event {
     fn command_opcode(&self) -> Opcode;
-    fn guess_command_opcode(buf: &[u8]) -> Result<Opcode, PackError>;
+    fn guess_command_opcode(buf: &[u8]) -> Option<Opcode>;
 }
 impl<Params: ReturnParameters> ReturnEvent for CommandComplete<Params> {
     fn command_opcode(&self) -> Opcode {
         self.opcode
     }
-    fn guess_command_opcode(buf: &[u8]) -> Result<Opcode, PackError> {
-        if buf.len() < 3 {
-            Err(PackError::BadLength {
-                expected: 3,
-                got: buf.len(),
-            })
+    fn guess_command_opcode(buf: &[u8]) -> Option<Opcode> {
+        if buf.len() >= 3 {
+            Opcode::unpack(&buf[1..3]).ok()
         } else {
-            Opcode::unpack(&buf[1..3])
+            None
         }
     }
 }

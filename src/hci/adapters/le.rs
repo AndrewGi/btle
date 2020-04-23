@@ -12,11 +12,11 @@ use crate::{
     },
     le::{
         advertisement::{StaticAdvBuffer, MAX_ADV_LEN},
-        advertiser::{Advertiser, AdvertisingParameters},
+        advertiser::AdvertisingParameters,
         report::ReportInfo,
         scan::ScanParameters,
     },
-    BoxFuture, Stream,
+    Stream,
 };
 use core::convert::TryFrom;
 use core::ops::{Deref, DerefMut};
@@ -206,7 +206,7 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
             .flatten())
     }
 }
-
+/*
 impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> Advertiser for LEAdapter<A, S> {
     fn set_advertising_enable(
         &mut self,
@@ -232,3 +232,4 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> Advertiser for LEAdap
         Box::pin(LEAdapter::set_advertising_data(self, data))
     }
 }
+*/

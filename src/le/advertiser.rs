@@ -1,7 +1,6 @@
 //! Generic BLE Advertiser (WIP)
-use crate::hci::adapter;
+use crate::BTAddress;
 use crate::ConversionError;
-use crate::{BTAddress, BoxFuture};
 use core::convert::TryFrom;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -290,7 +289,7 @@ impl Default for AdvertisingParameters {
         Self::DEFAULT
     }
 }
-
+/*
 pub trait Advertiser {
     fn set_advertising_enable<'a>(
         &'a mut self,
@@ -305,3 +304,4 @@ pub trait Advertiser {
         data: &'d [u8],
     ) -> BoxFuture<'d, Result<(), adapter::Error>>;
 }
+*/

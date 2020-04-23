@@ -1,11 +1,11 @@
 //! HCI Command and command utilities.
 use crate::bytes::Storage;
-use crate::hci::event::ReturnEvent;
+use crate::hci::event::{Event, EventPacket, ReturnEvent};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{Opcode, OPCODE_LEN};
 use crate::PackError;
 use core::convert::TryFrom;
-use std::convert::TryInto;
+use core::convert::TryInto;
 
 /// Raw HCI Command Packet. Stores command [`Opcode`] and `parameters` (byte buffer).
 /// [`Opcode`]: crate::hci::Opcode;
@@ -94,5 +94,15 @@ pub trait Command {
         let len = self.pack_full(&mut buf[1..])?;
         buf[0] = PacketType::Command.into();
         Ok(len + 1)
+    }
+    fn unpack_return(event: EventPacket<&[u8]>) -> Result<Option<Self::Return>, PackError> {
+        if event.event_code() == Self::Return::EVENT_CODE {
+            if let Some(guess) = Self::Return::guess_command_opcode(event.parameters()) {
+                if Self::opcode() == guess {
+                    return Ok(Some(Self::Return::event_unpack_from(event.parameters())?));
+                }
+            }
+        }
+        Ok(None)
     }
 }
