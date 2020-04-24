@@ -78,7 +78,7 @@ pub async fn dump_adapter<A: btle::hci::adapter::Adapter>(
     let adapter = unsafe { Pin::new_unchecked(&mut adapter) };
     let adapter = btle::hci::adapters::Adapter::new(adapter);
     let mut le = adapter.le();
-
+    println!("resetting adapter...");
     le.adapter_mut().reset().await?;
     println!("settings scan parameters...");
     // Set BLE Scan parameters (when to scan, how long, etc)

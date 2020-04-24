@@ -68,7 +68,6 @@ pub trait Adapter {
                 .await?;
             for _try_i in 0..HCI_EVENT_READ_TRIES {
                 let event: EventPacket<Buf> = self.as_mut().read_event::<Buf>().await?;
-                dbg!(&event);
                 if let Some(ret) =
                     Cmd::unpack_return(event.as_ref()).map_err(StreamError::EventError)?
                 {

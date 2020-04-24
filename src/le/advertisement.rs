@@ -139,6 +139,14 @@ impl<StructBuf> RawAdStructureBuffer<StructBuf> {
         Self { ad_type, buf }
     }
 }
+impl<StructBuf: AsRef<[u8]>> RawAdStructureBuffer<StructBuf> {
+    pub fn as_ref(&self) -> RawAdStructureBuffer<&'_ [u8]> {
+        RawAdStructureBuffer {
+            ad_type: self.ad_type,
+            buf: self.buf.as_ref(),
+        }
+    }
+}
 impl<StructBuf: AsRef<[u8]>> AdStructureType for RawAdStructureBuffer<StructBuf> {
     fn ad_type(&self) -> AdType {
         self.ad_type
@@ -216,7 +224,7 @@ pub struct AdStructureIterator<'a> {
 impl<'a> Iterator for AdStructureIterator<'a> {
     type Item = RawAdStructureBuffer;
 
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next(&mut self) -> Option<RawAdStructureBuffer> {
         if self.data.len() < 2 {
             return None;
         }

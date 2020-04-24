@@ -62,6 +62,19 @@ impl PackError {
             })
         }
     }
+    /// Ensure `buf.len() >= expected`. Returns `Ok(())` if they are or
+    /// `Err(HCIPackError::BadLength)` not.
+    #[inline]
+    pub fn atleast_length(expected: usize, buf: &[u8]) -> Result<(), PackError> {
+        if buf.len() == expected {
+            Ok(())
+        } else {
+            Err(PackError::BadLength {
+                expected,
+                got: buf.len(),
+            })
+        }
+    }
     /// Returns `PackError::BadBytes { index: Some(index) }`.
     #[inline]
     pub fn bad_index(index: usize) -> PackError {

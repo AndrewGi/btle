@@ -156,4 +156,13 @@ impl<T: AsRef<[u8]>> ReportInfo<T> {
         // event_type (1) + address_type (1) + address (6) + data (data.len()) + rssi (1)
         1 + 1 + BT_ADDRESS_LEN + self.data.as_ref().len() + 1
     }
+    pub fn as_ref(&self) -> ReportInfo<&[u8]> {
+        ReportInfo {
+            event_type: self.event_type,
+            address_type: self.address_type,
+            address: self.address,
+            data: RawAdvertisement(self.data.as_ref()),
+            rssi: self.rssi,
+        }
+    }
 }
