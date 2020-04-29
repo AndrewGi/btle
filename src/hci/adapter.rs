@@ -47,10 +47,10 @@ impl std::error::Error for Error {}
 impl crate::error::Error for Error {}
 ///WIP HCI Adapter trait
 pub trait Adapter {
-    fn write_command(
-        self: Pin<&mut Self>,
-        packet: CommandPacket<&[u8]>,
-    ) -> LocalBoxFuture<'_, Result<(), Error>>;
+    fn write_command<'s, 'p: 's>(
+        self: Pin<&'s mut Self>,
+        packet: CommandPacket<&'p [u8]>,
+    ) -> LocalBoxFuture<'s, Result<(), Error>>;
     fn send_command<'a, 'c: 'a, Cmd: Command + 'c>(
         mut self: Pin<&'a mut Self>,
         command: Cmd,
@@ -77,7 +77,7 @@ pub trait Adapter {
             Err(hci::adapter::Error::StreamError(StreamError::StreamFailed))
         })
     }
-    fn read_event<S: Storage<u8>>(
-        self: Pin<&mut Self>,
-    ) -> LocalBoxFuture<'_, Result<EventPacket<S>, Error>>;
+    fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
+        self: Pin<&'s mut Self>,
+    ) -> LocalBoxFuture<'s, Result<EventPacket<S>, Error>>;
 }

@@ -34,7 +34,7 @@ use crate::PackError;
 use core::convert::{TryFrom, TryInto};
 use core::fmt::Formatter;
 
-pub const MAX_ACL_SIZE: usize = (1492 + 4);
+pub const MAX_ACL_SIZE: usize = 1492 + 4;
 pub const MAX_SCO_SIZE: usize = 255;
 pub const MAX_EVENT_SIZE: usize = 260;
 pub const MAX_FRAME_SIZE: usize = MAX_ACL_SIZE + 4;

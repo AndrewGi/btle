@@ -230,6 +230,9 @@ impl<'a> Iterator for AdStructureIterator<'a> {
         }
         let d = mem::replace(&mut self.data, &[]);
         let len = usize::from(d[0]);
+        if len + 1 > d.len() {
+            return None;
+        }
         let (data, rest) = d.split_at(len + 1);
         self.data = rest;
         let ad_type = AdType::try_from(data[1]).ok()?;

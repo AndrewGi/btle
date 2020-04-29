@@ -172,10 +172,10 @@ impl Drop for Adapter {
 }
 
 impl hci::adapter::Adapter for Adapter {
-    fn write_command(
-        mut self: Pin<&mut Self>,
-        packet: CommandPacket<&[u8]>,
-    ) -> LocalBoxFuture<'_, Result<(), hci::adapter::Error>> {
+    fn write_command<'s, 'p: 's>(
+        mut self: Pin<&'s mut Self>,
+        packet: CommandPacket<&'p [u8]>,
+    ) -> LocalBoxFuture<'s, Result<(), hci::adapter::Error>> {
         let packed = packet.to_raw_packet::<StaticEventBuffer>();
         Box::pin(async move {
             self.write_hci_command_bytes(packed.buf.as_ref())
@@ -183,9 +183,9 @@ impl hci::adapter::Adapter for Adapter {
         })
     }
 
-    fn read_event<S: Storage<u8>>(
-        mut self: Pin<&mut Self>,
-    ) -> LocalBoxFuture<'_, Result<EventPacket<S>, hci::adapter::Error>> {
+    fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
+        mut self: Pin<&'s mut Self>,
+    ) -> LocalBoxFuture<'s, Result<EventPacket<S>, hci::adapter::Error>> {
         Box::pin(async move { self.read_event_packet().map_err(hci::adapter::Error::from) })
     }
 }

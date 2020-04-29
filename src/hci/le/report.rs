@@ -80,11 +80,11 @@ impl<T: Storage<ReportInfo<B>>, B: Storage<u8> + Default + Copy> MetaEvent
                 .get(data_len_index)
                 .map(|e| *e)
                 .ok_or(PackError::bad_index(data_len_index))?;
-            let data_index_end = data_index + usize::from(data_len);
+            let data_index_end = data_index + 1 + usize::from(data_len);
             if usize::from(data_len) > MAX_ADV_LEN {
                 return Err(PackError::bad_index(data_len_index));
             }
-            let data = &buf[data_index..data_index_end];
+            let data = &buf[data_index + 1..data_index_end];
             PackError::expect_length(data_len.into(), data)?;
             out.reports.as_mut()[i] = ReportInfo {
                 event_type,

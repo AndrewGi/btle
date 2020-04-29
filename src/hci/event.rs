@@ -4,7 +4,7 @@ use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::{ErrorCode, Opcode, EVENT_CODE_LEN, EVENT_MAX_LEN, OPCODE_LEN};
 use crate::ConversionError;
 use crate::PackError;
-use core::convert::TryFrom;
+use core::convert::{TryFrom, TryInto};
 use core::fmt::Formatter;
 
 /// HCI Event Code. 8-bit code corresponding to an HCI Event. Check the Bluetooth Core Spec for more.
@@ -182,7 +182,7 @@ pub trait Event {
     /// Pack the `Event` parameters into a byte buffer.
     fn event_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
     fn event_pack_packet<S: Storage<u8>>(&self) -> Result<EventPacket<S>, PackError> {
-        let mut out = S::with_size(self.event_full_byte_len());
+        let mut out = S::with_size(self.event_byte_len());
         self.event_pack_into(out.as_mut())?;
         Ok(EventPacket {
             event_code: Self::EVENT_CODE,
@@ -242,6 +242,18 @@ impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
     }
     pub fn take_parameters(self) -> Storage {
         self.parameters
+    }
+    pub fn to_raw_packet<NewStorage: crate::bytes::Storage<u8>>(&self) -> RawPacket<NewStorage> {
+        let para_len = self.parameters.as_ref().len();
+        let len = para_len + 1 + 1;
+        let mut buf = NewStorage::with_size(len);
+        buf.as_mut()[2..].copy_from_slice(self.parameters.as_ref());
+        buf.as_mut()[0] = self.event_code.into();
+        buf.as_mut()[1] = para_len.try_into().expect("len bigger than an u8");
+        RawPacket {
+            packet_type: PacketType::Event,
+            buf,
+        }
     }
 }
 impl<'a> TryFrom<RawPacket<&'a [u8]>> for EventPacket<&'a [u8]> {

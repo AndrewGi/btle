@@ -10,6 +10,18 @@ pub trait Error: core::fmt::Debug {
     }
 }
 
+impl<'a, E: Error + 'a> From<E> for Box<dyn Error + 'a> {
+    fn from(e: E) -> Self {
+        Box::new(e)
+    }
+}
+#[cfg(feature = "std")]
+impl std::error::Error for Box<dyn Error> {}
+impl core::fmt::Display for Box<dyn Error> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", self.as_ref())
+    }
+}
 pub struct StdError<E: Error + ?Sized>(pub E);
 impl<E: Error> From<E> for StdError<E> {
     fn from(e: E) -> Self {
@@ -30,7 +42,6 @@ impl<T: Error> core::fmt::Display for StdError<T> {
 impl<E: Error> Error for StdError<E> {}
 #[cfg(feature = "std")]
 impl<E: Error> std::error::Error for StdError<E> {}
-
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum IOError {
     Unknown,

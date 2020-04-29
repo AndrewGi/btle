@@ -58,6 +58,26 @@ impl<Buf: AsRef<[u8]>> RawPacket<Buf> {
             buf: S::from_slice(self.buf.as_ref()),
         }
     }
+    pub fn total_len(&self) -> usize {
+        // Packet data + 1 (For PACKET_TYPE)
+        self.buf.as_ref().len() + 1
+    }
+    pub fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(self.total_len(), buf)?;
+        buf[0] = self.packet_type.into();
+        buf[1..].copy_from_slice(self.buf.as_ref());
+        Ok(())
+    }
+    pub fn pack<NewBuf: Storage<u8>>(&self) -> Option<NewBuf> {
+        let len = self.total_len();
+        if NewBuf::max_len() >= len {
+            let mut out = NewBuf::with_size(len);
+            self.pack_into(out.as_mut()).ok()?;
+            Some(out)
+        } else {
+            None
+        }
+    }
 }
 impl<'a> TryFrom<&'a [u8]> for RawPacket<&'a [u8]> {
     type Error = ConversionError;
