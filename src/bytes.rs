@@ -196,7 +196,7 @@ impl ToFromBytesEndian for bool {
 /// Static byte buffer. `StaticBuf<[u8; 16]>` can store a `[u8]` array from 0-16 bytes for example.
 /// Unlike other static buffers, this does NOT reallocate if you out grow the internal buffer. If
 /// you try to request more bytes than its able to store, it will panic.  
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Default)]
 pub struct StaticBuf<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> {
     buf: ArrayBuf,
     len: usize,
