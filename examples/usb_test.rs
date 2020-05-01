@@ -25,9 +25,9 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         .next()
         .ok_or(IOError::NotFound)??;
     println!("using {:?}", device);
-    let mut adapter = device.open()?;
+    let adapter = device.open()?;
     println!("got adapter! {:?}", adapter);
-    let mut adapter = Adapter::pin(&mut adapter);
+    let mut adapter = Adapter::new(adapter);
     // Read the HCI Capabilities (always first event)
     adapter.hci_read_event::<Box<[u8]>>().await?;
     // Reset the HCI Adapter

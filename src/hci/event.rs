@@ -1,7 +1,7 @@
 //! HCI Event and event utilities.
 use crate::bytes::{StaticBuf, Storage};
 use crate::hci::packet::{PacketType, RawPacket};
-use crate::hci::{ErrorCode, Opcode, EVENT_CODE_LEN, EVENT_MAX_LEN, OPCODE_LEN};
+use crate::hci::{ErrorCode, Opcode, EVENT_CODE_LEN, OPCODE_LEN};
 use crate::ConversionError;
 use crate::PackError;
 use core::convert::{TryFrom, TryInto};
@@ -190,32 +190,33 @@ pub trait Event {
         })
     }
 }
+pub const MAX_HCI_PACKET_SIZE: usize = 255 + 2 + 1 + 1;
 #[derive(Copy, Clone)]
-pub struct FullEventBuffer(pub [u8; EVENT_MAX_LEN]);
-impl FullEventBuffer {
-    pub const DEFAULT: FullEventBuffer = FullEventBuffer([0_u8; EVENT_MAX_LEN]);
+pub struct FullHCIBuffer(pub [u8; MAX_HCI_PACKET_SIZE]);
+impl FullHCIBuffer {
+    pub const DEFAULT: FullHCIBuffer = FullHCIBuffer([0_u8; MAX_HCI_PACKET_SIZE]);
 }
-impl Default for FullEventBuffer {
+impl Default for FullHCIBuffer {
     fn default() -> Self {
         Self::DEFAULT
     }
 }
-impl AsRef<[u8]> for FullEventBuffer {
+impl AsRef<[u8]> for FullHCIBuffer {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
-impl AsMut<[u8]> for FullEventBuffer {
+impl AsMut<[u8]> for FullHCIBuffer {
     fn as_mut(&mut self) -> &mut [u8] {
         self.0.as_mut()
     }
 }
-impl From<FullEventBuffer> for [u8; EVENT_MAX_LEN] {
-    fn from(b: FullEventBuffer) -> Self {
+impl From<FullHCIBuffer> for [u8; MAX_HCI_PACKET_SIZE] {
+    fn from(b: FullHCIBuffer) -> Self {
         b.0
     }
 }
-pub type StaticEventBuffer = StaticBuf<u8, FullEventBuffer>;
+pub type StaticHCIBuffer = StaticBuf<u8, FullHCIBuffer>;
 /// Unprocessed HCI Event Packet
 pub struct EventPacket<Storage> {
     pub event_code: EventCode,
@@ -253,6 +254,12 @@ impl<Storage: AsRef<[u8]>> EventPacket<Storage> {
         RawPacket {
             packet_type: PacketType::Event,
             buf,
+        }
+    }
+    pub fn to_new_storage<NewStorage: crate::bytes::Storage<u8>>(&self) -> EventPacket<NewStorage> {
+        EventPacket {
+            event_code: self.event_code,
+            parameters: NewStorage::from_slice(self.parameters().as_ref()),
         }
     }
 }

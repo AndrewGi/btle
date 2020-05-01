@@ -19,18 +19,14 @@ use crate::{
     Stream,
 };
 use core::convert::TryFrom;
-use core::ops::{Deref, DerefMut};
 use futures_util::StreamExt;
 
-pub struct LEAdapter<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> {
-    adapter: Adapter<A, S>,
+pub struct LEAdapter<A: adapter::Adapter> {
+    pub adapter: Adapter<A>,
 }
-impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> LEAdapter<A, S> {
-    pub fn new(adapter: Adapter<A, S>) -> Self {
+impl<A: adapter::Adapter> LEAdapter<A> {
+    pub fn new(adapter: Adapter<A>) -> Self {
         Self { adapter }
-    }
-    pub fn adapter_mut(&mut self) -> Adapter<A, &'_ mut A> {
-        self.adapter.as_mut()
     }
     /// Read the advertising channel TX power in dBm. See [`le::advertise::TxPowerLevel`] for more.
     pub async fn get_advertising_tx_power(

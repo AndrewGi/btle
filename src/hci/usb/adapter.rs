@@ -2,12 +2,11 @@ use crate::bytes::Storage;
 use crate::error::IOError;
 use crate::hci;
 use crate::hci::command::CommandPacket;
-use crate::hci::event::{EventCode, EventPacket, StaticEventBuffer};
+use crate::hci::event::{EventCode, EventPacket, StaticHCIBuffer};
 use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::usb::device::{Device, DeviceIdentifier};
 use crate::hci::usb::Error;
 use core::convert::TryFrom;
-use core::pin::Pin;
 use core::time::Duration;
 use futures_util::future::LocalBoxFuture;
 
@@ -173,10 +172,10 @@ impl Drop for Adapter {
 
 impl hci::adapter::Adapter for Adapter {
     fn write_command<'s, 'p: 's>(
-        mut self: Pin<&'s mut Self>,
+        &'s mut self,
         packet: CommandPacket<&'p [u8]>,
     ) -> LocalBoxFuture<'s, Result<(), hci::adapter::Error>> {
-        let packed = packet.to_raw_packet::<StaticEventBuffer>();
+        let packed = packet.to_raw_packet::<StaticHCIBuffer>();
         Box::pin(async move {
             self.write_hci_command_bytes(packed.buf.as_ref())
                 .map_err(hci::adapter::Error::from)
@@ -184,7 +183,7 @@ impl hci::adapter::Adapter for Adapter {
     }
 
     fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
-        mut self: Pin<&'s mut Self>,
+        &'s mut self,
     ) -> LocalBoxFuture<'s, Result<EventPacket<S>, hci::adapter::Error>> {
         Box::pin(async move { self.read_event_packet().map_err(hci::adapter::Error::from) })
     }

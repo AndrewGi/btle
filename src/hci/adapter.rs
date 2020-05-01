@@ -5,7 +5,6 @@ use crate::hci::command::{Command, CommandPacket};
 use crate::hci::event::EventPacket;
 use crate::hci::stream::HCI_EVENT_READ_TRIES;
 use crate::hci::StreamError;
-use core::pin::Pin;
 use futures_util::future::LocalBoxFuture;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -48,26 +47,25 @@ impl crate::error::Error for Error {}
 ///WIP HCI Adapter trait
 pub trait Adapter {
     fn write_command<'s, 'p: 's>(
-        self: Pin<&'s mut Self>,
+        &'s mut self,
         packet: CommandPacket<&'p [u8]>,
     ) -> LocalBoxFuture<'s, Result<(), Error>>;
     fn send_command<'a, 'c: 'a, Cmd: Command + 'c>(
-        mut self: Pin<&'a mut Self>,
+        &'a mut self,
         command: Cmd,
-    ) -> LocalBoxFuture<'_, Result<Cmd::Return, hci::adapter::Error>> {
+    ) -> LocalBoxFuture<'a, Result<Cmd::Return, hci::adapter::Error>> {
         Box::pin(async move {
             type Buf = Box<[u8]>;
             // Pack Command
-            self.as_mut()
-                .write_command(
-                    command
-                        .pack_command_packet::<Buf>()
-                        .map_err(StreamError::CommandError)?
-                        .as_ref(),
-                )
-                .await?;
+            self.write_command(
+                command
+                    .pack_command_packet::<Buf>()
+                    .map_err(StreamError::CommandError)?
+                    .as_ref(),
+            )
+            .await?;
             for _try_i in 0..HCI_EVENT_READ_TRIES {
-                let event: EventPacket<Buf> = self.as_mut().read_event::<Buf>().await?;
+                let event: EventPacket<Buf> = self.read_event::<Buf>().await?;
                 if let Some(ret) =
                     Cmd::unpack_return(event.as_ref()).map_err(StreamError::EventError)?
                 {
@@ -78,6 +76,21 @@ pub trait Adapter {
         })
     }
     fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
-        self: Pin<&'s mut Self>,
+        &'s mut self,
     ) -> LocalBoxFuture<'s, Result<EventPacket<S>, Error>>;
+}
+pub struct DummyAdapter;
+impl Adapter for DummyAdapter {
+    fn write_command<'s, 'p: 's>(
+        &'s mut self,
+        packet: CommandPacket<&'p [u8]>,
+    ) -> LocalBoxFuture<'s, Result<(), Error>> {
+        unimplemented!("dummy adapter write event {:?}", packet)
+    }
+
+    fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
+        &'s mut self,
+    ) -> LocalBoxFuture<'s, Result<EventPacket<S>, Error>> {
+        unimplemented!("dummy adapter read event")
+    }
 }

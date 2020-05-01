@@ -2,16 +2,18 @@
 //! commands.
 use crate::bytes::Storage;
 use crate::error;
-use crate::hci::command::Command;
-use crate::hci::event::{Event, EventCode, EventPacket};
+use crate::hci::command::CommandPacket;
+use crate::hci::event::{EventCode, EventPacket, StaticHCIBuffer, MAX_HCI_PACKET_SIZE};
 use crate::hci::packet::{PacketType, RawPacket};
-use crate::hci::{Opcode, StreamError, FULL_COMMAND_MAX_LEN};
+use crate::hci::{adapter, Opcode, StreamError};
 use crate::PackError;
 use core::convert::{TryFrom, TryInto};
-use core::future::Future;
+use core::ops::Deref;
+use core::ops::DerefMut;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use futures_util::future::poll_fn;
+use core::u32;
+use futures_util::future::{poll_fn, LocalBoxFuture};
 
 impl From<PackError> for StreamError {
     fn from(e: PackError) -> Self {
@@ -54,6 +56,13 @@ impl Filter {
             })
         } else {
             None
+        }
+    }
+    pub fn all_events() -> Filter {
+        Filter {
+            type_mask: 1 << 4,
+            event_mask: [u32::MAX, u32::MAX],
+            opcode: Opcode::nop(),
         }
     }
     pub fn enable_event(&mut self, event: EventCode) {
@@ -107,8 +116,8 @@ impl Filter {
 }
 /// Set IOCTL HCI filter. See [`Filter`] for more.
 pub trait HCIFilterable {
-    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), StreamError>;
-    fn get_filter(self: Pin<&Self>) -> Result<Filter, StreamError>;
+    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), adapter::Error>;
+    fn get_filter(self: Pin<&Self>) -> Result<Filter, adapter::Error>;
 }
 /// Asynchronous HCI byte stream writer.
 pub trait HCIWriter {
@@ -118,10 +127,10 @@ pub trait HCIWriter {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize, StreamError>>;
+    ) -> Poll<Result<usize, adapter::Error>>;
 
     /// Flush any bytes in the `HCIWriter` stream. Mirrors an `AsyncWrite` trait.
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), StreamError>>;
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), adapter::Error>>;
 }
 /// Asynchronous HCI byte stream reader.
 pub trait HCIReader: Unpin {
@@ -131,172 +140,66 @@ pub trait HCIReader: Unpin {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
-    ) -> Poll<Result<usize, StreamError>>;
+    ) -> Poll<Result<usize, adapter::Error>>;
 }
 /// HCI Stream. Wraps the `poll_read` and `poll_write` methods of [`HCIReader`] and [`HCIWriter`]
 /// to provide the [`Stream::read_packet`] and [`Stream::send_command`] functions.
-pub struct Stream<S: HCIReader> {
-    pub stream: S,
+pub struct Stream<S: HCIReader, B: Deref<Target = S>> {
+    pub stream: Pin<B>,
 }
 pub const HCI_EVENT_READ_TRIES: usize = 20;
-impl<S: HCIReader> Stream<S> {
-    pub fn new(stream: S) -> Self {
+impl<S: HCIReader, B: Deref<Target = S> + DerefMut> Stream<S, B> {
+    pub fn new(stream: Pin<B>) -> Self {
         Self { stream }
     }
-    pub fn stream_pinned(self: Pin<&mut Self>) -> Pin<&mut S> {
-        unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().stream) }
+    pub fn stream_pinned(&mut self) -> Pin<&mut S> {
+        self.stream.as_mut()
     }
-    pub async fn send_exact(mut self: Pin<&mut Self>, mut buf: &[u8]) -> Result<(), StreamError>
+    pub async fn send_exact(&mut self, mut buf: &[u8]) -> Result<(), adapter::Error>
     where
         S: HCIWriter,
     {
         while !buf.is_empty() {
-            let amount = poll_fn(|cx| self.as_mut().stream_pinned().poll_write(cx, buf)).await?;
+            let amount = poll_fn(|cx| self.stream_pinned().poll_write(cx, buf)).await?;
             buf = &buf[amount..];
         }
-        poll_fn(|cx| self.as_mut().stream_pinned().poll_flush(cx)).await
+        poll_fn(|cx| self.stream_pinned().poll_flush(cx)).await
     }
-    pub async fn send_command<Cmd: Command>(
-        mut self: Pin<&mut Self>,
-        command: Cmd,
-    ) -> Result<Cmd::Return, StreamError>
+    pub async fn read_bytes(&mut self, buf: &mut [u8]) -> Result<usize, adapter::Error> {
+        poll_fn(|cx| self.stream_pinned().poll_read(cx, buf)).await
+    }
+    pub async fn read_event<Buf: Storage<u8>>(
+        &mut self,
+    ) -> Result<EventPacket<Buf>, adapter::Error> {
+        let mut event_buf = StaticHCIBuffer::with_size(MAX_HCI_PACKET_SIZE);
+        let len = self.read_bytes(event_buf.as_mut()).await?;
+        let packet = RawPacket::try_from(&event_buf.as_ref()[..len])
+            .map_err(|_| StreamError::BadPacketCode)?;
+        let event_packet = EventPacket::try_from(packet).map_err(StreamError::EventError)?;
+        Ok(event_packet.to_new_storage())
+    }
+    pub async fn send_command_packet(
+        &mut self,
+        packet: CommandPacket<&[u8]>,
+    ) -> Result<(), adapter::Error>
     where
-        S: HCIWriter + HCIFilterable,
+        S: HCIWriter,
     {
-        const BUF_LEN: usize = FULL_COMMAND_MAX_LEN;
-        let mut buf = [0_u8; BUF_LEN];
-        // Pack Command
-        let len = command
-            .packet_pack_into(&mut buf[..])
-            .map_err(StreamError::CommandError)?;
-        // New Filter
-        let mut filter = Filter::default();
-        filter.enable_type(PacketType::Command);
-        filter.enable_type(PacketType::Event);
-
-        filter.enable_event(EventCode::CommandStatus);
-        filter.enable_event(EventCode::CommandComplete);
-        filter.enable_event(EventCode::LEMeta);
-
-        filter.enable_event(Cmd::Return::EVENT_CODE);
-        if !filter.get_event(Cmd::Return::EVENT_CODE) {
-            return Err(StreamError::BadEventCode);
-        }
-        *filter.opcode_mut() = Cmd::opcode();
-
-        // Save Old Filter
-        let old_filter = self.as_mut().stream_pinned().as_ref().get_filter()?;
-        self.as_mut().stream_pinned().set_filter(&filter)?;
-
-        // Send command Bytes
-        self.as_mut().send_exact(&buf[..len]).await?;
-
-        // Wait for response
-        for _try_i in 0..HCI_EVENT_READ_TRIES {
-            // Reuse `buf` to read the RawPacket
-            let event = EventPacket::try_from(self.as_mut().read_packet(&mut buf[..]).await?)?;
-            if event.event_code() == Cmd::Return::EVENT_CODE {
-                if Opcode::unpack(&event.parameters().as_ref()[1..3])? == Cmd::opcode() {
-                    self.stream_pinned().set_filter(&old_filter)?;
-                    return Cmd::Return::event_unpack_from(event.parameters())
-                        .map_err(StreamError::CommandError);
-                }
-            }
-        }
-        Err(StreamError::StreamFailed)
-    }
-    pub async fn read_bytes(
-        mut self: Pin<&mut Self>,
-        buf: &mut [u8],
-    ) -> Result<usize, StreamError> {
-        poll_fn(|cx| self.as_mut().stream_pinned().poll_read(cx, buf)).await
-    }
-    pub fn read_packet<'r, 'b>(&'r mut self, buf: &'b mut [u8]) -> ByteRead<'b, 'r, S> {
-        ByteRead::new(&mut self.stream, buf)
+        let out = packet.pack_as_raw_packet::<StaticHCIBuffer>();
+        self.send_exact(out.as_ref()).await
     }
 }
-pub struct ByteRead<'b: 'r, 'r, R: HCIReader> {
-    buf: Option<&'b mut [u8]>,
-    reader: &'r mut R,
-}
-impl<'b: 'r, 'r, R: HCIReader> ByteRead<'b, 'r, R> {
-    pub fn new(reader: &'r mut R, buf: &'b mut [u8]) -> Self {
-        Self {
-            buf: Some(buf),
-            reader,
-        }
-    }
-}
-impl<'b: 'r, 'r, R: HCIReader> core::future::Future for ByteRead<'b, 'r, R> {
-    type Output = Result<RawPacket<&'b [u8]>, StreamError>;
-
-    fn poll(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<RawPacket<&'b [u8]>, StreamError>> {
-        let this = &mut *self;
-        let buf = match &mut this.buf {
-            None => return Poll::Ready(Err(StreamError::StreamFailed)),
-            Some(b) => b,
-        };
-        let len = match Pin::new(&mut *this.reader).poll_read(cx, *buf) {
-            Poll::Ready(r) => match r {
-                Ok(l) => l,
-                Err(e) => return Poll::Ready(Err(e)),
-            },
-            Poll::Pending => return Poll::Pending,
-        };
-        debug_assert!(len < buf.len(), "there might be more bytes to read");
-        Poll::Ready(
-            RawPacket::try_from(&this.buf.take().expect("just used above")[..len])
-                .map_err(|_| StreamError::BadPacketCode),
-        )
-    }
-}
-const EVENT_HEADER_LEN: usize = 3;
-/*
-#[cfg(feature = "std")]
-impl<T: futures_io::AsyncRead + Unpin> HCIReader for T {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize, StreamError>> {
-        futures_io::AsyncRead::poll_read(self, cx, buf).map_err(|_| StreamError::IOError)
-    }
-}
-#[cfg(feature = "std")]
-impl<T: futures_io::AsyncWrite> HCIWriter for T {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize, StreamError>> {
-        futures_io::AsyncWrite::poll_write(self, cx, buf).map_err(|_| StreamError::IOError)
+impl<S: HCIWriter + HCIReader, B: Deref<Target = S> + DerefMut> adapter::Adapter for Stream<S, B> {
+    fn write_command<'s, 'p: 's>(
+        &'s mut self,
+        packet: CommandPacket<&'p [u8]>,
+    ) -> LocalBoxFuture<'s, Result<(), adapter::Error>> {
+        Box::pin(self.send_command_packet(packet))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), StreamError>> {
-        futures_io::AsyncWrite::poll_flush(self, cx).map_err(|_| StreamError::IOError)
-    }
-}
-*/
-/// Implements all the traits required to be a complete HCI Stream.
-pub trait HCIStreamable: HCIWriter + HCIReader + HCIFilterable + Send {}
-impl<T: HCIWriter + HCIReader + HCIFilterable + Send> HCIStreamable for T {}
-
-pub struct PacketStream<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>> {
-    stream: &'a mut Stream<S>,
-    buf: Buf,
-}
-impl<'a, S: HCIWriter + HCIReader + HCIFilterable, Buf: Storage<u8>> crate::Stream
-    for PacketStream<'a, S, Buf>
-{
-    type Item = Result<RawPacket<Buf>, StreamError>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = &mut *self;
-        Pin::new(&mut this.stream.read_packet(this.buf.as_mut()))
-            .poll(cx)
-            .map(|r| Some(r.map(|p| p.clone_buf())))
+    fn read_event<'s, 'p: 's, Buf: Storage<u8> + 'p>(
+        &'s mut self,
+    ) -> LocalBoxFuture<'s, Result<EventPacket<Buf>, adapter::Error>> {
+        Box::pin(self.read_event())
     }
 }

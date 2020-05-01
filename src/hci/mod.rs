@@ -4,6 +4,8 @@
 pub mod adapter;
 pub mod adapters;
 pub mod baseband;
+#[cfg(all(unix, feature = "bluez_socket"))]
+pub mod bluez_socket;
 pub mod command;
 pub mod event;
 pub mod le;
@@ -11,8 +13,6 @@ pub mod link_control;
 pub mod packet;
 #[cfg(feature = "remote")]
 pub mod remote;
-#[cfg(all(unix, feature = "bluez"))]
-pub mod socket;
 pub mod stream;
 #[cfg(feature = "hci_usb")]
 pub mod usb;

@@ -8,60 +8,33 @@ use crate::hci::baseband::{EventMask, Reset, SetEventMask};
 use crate::hci::command::Command;
 use crate::hci::event::EventPacket;
 use crate::Stream;
-use core::ops::{Deref, DerefMut};
-use core::pin::Pin;
 
-pub struct Adapter<A: adapter::Adapter, S: Deref<Target = A>> {
-    pub adapter: Pin<S>,
+pub struct Adapter<A: adapter::Adapter> {
+    pub adapter: A,
 }
-impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> Adapter<A, S> {
-    pub fn new(adapter: Pin<S>) -> Self {
+impl<A: adapter::Adapter> Adapter<A> {
+    pub fn new(adapter: A) -> Self {
         Self { adapter }
     }
-    pub fn pin(adapter: S) -> Self
-    where
-        A: Unpin,
-    {
-        Self::new(Pin::new(adapter))
-    }
-    pub fn adapter_mut(&mut self) -> Pin<&mut A> {
-        self.adapter.as_mut()
-    }
-    pub fn adapter_ref(&self) -> Pin<&A> {
-        self.adapter.as_ref()
-    }
-    pub fn as_ref(&self) -> Adapter<A, &'_ A> {
-        Adapter {
-            adapter: self.adapter.as_ref(),
-        }
-    }
-    pub fn as_mut(&mut self) -> Adapter<A, &'_ mut A> {
-        Adapter {
-            adapter: self.adapter.as_mut(),
-        }
-    }
-    pub fn le(self) -> le::LEAdapter<A, S> {
+    pub fn le(self) -> le::LEAdapter<A> {
         LEAdapter::new(self)
-    }
-    pub fn le_mut(&mut self) -> le::LEAdapter<A, &'_ mut A> {
-        LEAdapter::new(self.as_mut())
     }
     pub async fn hci_send_command<'a, 'c: 'a, Cmd: Command + 'c>(
         &mut self,
         cmd: Cmd,
     ) -> Result<Cmd::Return, adapter::Error> {
-        self.adapter_mut().send_command(cmd).await
+        self.adapter.send_command(cmd).await
     }
     pub async fn hci_read_event<Buf: Storage<u8>>(
         &mut self,
     ) -> Result<EventPacket<Buf>, adapter::Error> {
-        self.adapter_mut().read_event().await
+        self.adapter.read_event().await
     }
     pub fn hci_event_stream<'a, 'b: 'a, Buf: Storage<u8> + 'b>(
         &'a mut self,
     ) -> impl Stream<Item = Result<EventPacket<Buf>, adapter::Error>> + 'a {
         futures_util::stream::unfold(self, move |s| async move {
-            Some((s.adapter.as_mut().read_event().await, s))
+            Some((s.adapter.read_event().await, s))
         })
     }
     pub async fn set_event_mask(&mut self, mask: EventMask) -> Result<(), adapter::Error> {

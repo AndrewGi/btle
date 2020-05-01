@@ -11,7 +11,7 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 
 [features]
 default = ["hci",  "std"]
-bluez = ["nix", "libc", "std", "hci", "tokio/uds"]
+bluez_socket = ["nix", "libc", "std", "hci", "tokio/uds"]
 winrt_drivers = ["winrt", "std"]
 hci = []
 hci_usb = ["hci", "rusb"]

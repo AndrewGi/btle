@@ -34,6 +34,26 @@ impl<Buf: AsRef<[u8]>> CommandPacket<Buf> {
             buf,
         }
     }
+    pub fn pack_as_raw_packet<NewStorage: Storage<u8>>(&self) -> NewStorage {
+        let para_len = self.parameters.as_ref().len();
+        let len = para_len + OPCODE_LEN + 1 + 1;
+        let mut out = NewStorage::with_size(len);
+        out.as_mut()[0] = PacketType::Command.into();
+        self.opcode
+            .pack(&mut out.as_mut()[1..1 + OPCODE_LEN])
+            .expect("given a hardcoded length buf");
+        out.as_mut()[1 + OPCODE_LEN] = para_len.try_into().expect("len bigger than an u8");
+        out.as_mut()[1 + 1 + OPCODE_LEN..].copy_from_slice(self.parameters.as_ref());
+        out
+    }
+}
+impl<Storage: AsRef<[u8]>> core::fmt::Debug for CommandPacket<Storage> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CommandPacket<Storage>")
+            .field("opcode", &self.opcode)
+            .field("parameters", &AsRef::<[u8]>::as_ref(&self.parameters))
+            .finish()
+    }
 }
 pub struct CommandHeader {
     pub opcode: Opcode,

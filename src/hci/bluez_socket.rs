@@ -1,10 +1,21 @@
 //! BlueZ socket layer. Interacts with the BlueZ driver over socket AF_BLUETOOTH.
+use crate::hci::stream::{Filter, HCIFilterable, HCIReader, HCIWriter, FILTER_LEN};
+use crate::BTAddress;
+use core::convert::TryFrom;
+use core::fmt::{Display, Formatter};
+use core::ops::Deref;
 use core::pin::Pin;
 use std::os::unix::{
     io::{AsRawFd, FromRawFd, RawFd},
     net::UnixStream,
 };
+
+use crate::error::IOError;
+use crate::hci::adapter::Error;
+use crate::hci::packet::PacketType;
+use futures_util::task::{Context, Poll};
 use std::sync::Mutex;
+
 mod ioctl {
     nix::ioctl_write_int!(hci_device_up, b'H', 201);
     nix::ioctl_write_int!(hci_device_down, b'H', 202);
@@ -114,40 +125,36 @@ struct SockaddrHCI {
 /// for HCI Events so that is why they are wrapped. Besides the filter, they are just byte streams
 /// that need to have the Events and Commands abstracted over them.
 pub struct HCISocket(UnixStream);
-/// Turns an libc `ERRNO` error number into a `HCISocketError`.
-pub fn handle_libc_error(i: RawFd) -> Result<i32, HCISocketError> {
+/// Turns an libc `ERRNO` error number into a `IOError`.
+pub fn handle_libc_error(i: RawFd) -> Result<i32, IOError> {
     if i < 0 {
         Err(handle_errno(nix::errno::errno()))
     } else {
         Ok(i)
     }
 }
-pub fn handle_errno(err: i32) -> HCISocketError {
+pub fn handle_errno(err: i32) -> IOError {
     match err {
-        -1 | 1 => HCISocketError::PermissionDenied,
-        -16 | 16 => HCISocketError::Busy,
-        e => HCISocketError::Other(e),
+        -1 | 1 => IOError::PermissionDenied,
+        -16 | 16 => IOError::Refused,
+        e => IOError::Code(e),
     }
 }
-#[derive(Debug)]
-pub enum HCISocketError {
-    PermissionDenied,
-    DeviceNotFound,
-    NotConnected,
-    Unsupported,
-    BadData,
-    Busy,
-    IO(std::io::Error),
-    Other(i32),
+impl From<HCISocket> for UnixStream {
+    fn from(socket: HCISocket) -> Self {
+        socket.0
+    }
 }
-impl crate::error::Error for HCISocketError {}
+pub enum HCISocketOption {
+    DataDir = 1,
+    Filter = 2,
+    Timestamp = 3,
+}
+const SOL_HCI: i32 = 0;
 impl HCISocket {
     /// Creates an `HCISocket` based on a `libc` file_descriptor (`i32`). Returns an error if could
     /// not bind to the `adapter_id`.
-    pub fn new_channel(
-        adapter_id: AdapterID,
-        channel: HCIChannel,
-    ) -> Result<HCISocket, HCISocketError> {
+    pub fn new_channel(adapter_id: AdapterID, channel: HCIChannel) -> Result<HCISocket, IOError> {
         let adapter_fd = handle_libc_error(unsafe {
             libc::socket(
                 libc::AF_BLUETOOTH,
@@ -169,7 +176,9 @@ impl HCISocket {
         })?;
         let stream = unsafe { UnixStream::from_raw_fd(adapter_fd) };
         let out = HCISocket(stream);
-        out.set_socket_filter(&Filter::default())?;
+        let mut filter = Filter::all_events();
+        filter.enable_type(PacketType::Command);
+        out.set_socket_filter(&filter)?;
         Ok(out)
     }
     pub unsafe fn new_unchecked(stream: UnixStream) -> HCISocket {
@@ -178,25 +187,12 @@ impl HCISocket {
     pub fn raw_fd(&self) -> i32 {
         self.0.as_raw_fd()
     }
-}
-impl From<HCISocket> for UnixStream {
-    fn from(socket: HCISocket) -> Self {
-        socket.0
-    }
-}
-pub enum HCISocketOption {
-    DataDir = 1,
-    Filter = 2,
-    Timestamp = 3,
-}
-const SOL_HCI: i32 = 0;
-impl HCISocket {
     /// Sets the HCI Event filter on the socket. Should only need to be called once. Is also called
     /// automatically by the `new` constructor.
-    pub fn set_socket_filter(&self, filter: &Filter) -> Result<(), HCISocketError> {
+    pub fn set_socket_filter(&self, filter: &Filter) -> Result<(), IOError> {
         Self::set_filter_raw(self.raw_fd(), filter)
     }
-    pub fn set_filter_raw(fd: RawFd, filter: &Filter) -> Result<(), HCISocketError> {
+    pub fn set_filter_raw(fd: RawFd, filter: &Filter) -> Result<(), IOError> {
         let mut filter_bytes = filter.pack();
         handle_libc_error(unsafe {
             libc::setsockopt(
@@ -209,10 +205,10 @@ impl HCISocket {
         })?;
         Ok(())
     }
-    pub fn get_socket_filter(&self) -> Result<Filter, HCISocketError> {
+    pub fn get_socket_filter(&self) -> Result<Filter, IOError> {
         Self::get_filter_raw(self.raw_fd())
     }
-    pub fn get_filter_raw(fd: RawFd) -> Result<Filter, HCISocketError> {
+    pub fn get_filter_raw(fd: RawFd) -> Result<Filter, IOError> {
         let mut buf = [0_u8; FILTER_LEN];
         let mut len = FILTER_LEN as u32;
         handle_libc_error(unsafe {
@@ -225,30 +221,21 @@ impl HCISocket {
             )
         })?;
         debug_assert_eq!(len, FILTER_LEN as u32);
-        Filter::unpack(&buf[..]).ok_or(HCISocketError::BadData)
+        Filter::unpack(&buf[..]).ok_or(IOError::InvalidData)
     }
 }
-impl HCIFilterable for HCISocket {
-    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
-        self.set_socket_filter(filter).ok().ok_or(Error::IOError)
-    }
-
-    fn get_filter(self: Pin<&Self>) -> Result<Filter, Error> {
-        self.get_socket_filter().ok().ok_or(Error::IOError)
-    }
-}
-fn hci_to_socket_error(err: nix::Error) -> HCISocketError {
+fn hci_to_socket_error(err: nix::Error) -> IOError {
     match err {
         nix::Error::Sys(i) => handle_errno(i as i32),
         nix::Error::InvalidPath | nix::Error::InvalidUtf8 => panic!("bad nix path"),
-        nix::Error::UnsupportedOperation => HCISocketError::Unsupported,
+        nix::Error::UnsupportedOperation => IOError::NotImplemented,
     }
 }
 pub struct Manager {
     control_fd: Mutex<i32>,
 }
 impl Manager {
-    pub fn new() -> Result<Manager, HCISocketError> {
+    pub fn new() -> Result<Manager, IOError> {
         Ok(Manager {
             control_fd: Mutex::new(handle_libc_error(unsafe {
                 libc::socket(
@@ -259,7 +246,7 @@ impl Manager {
             })?),
         })
     }
-    pub fn device_up(&self, adapter_id: AdapterID) -> Result<(), HCISocketError> {
+    pub fn device_up(&self, adapter_id: AdapterID) -> Result<(), IOError> {
         let control_lock = self
             .control_fd
             .lock()
@@ -267,7 +254,7 @@ impl Manager {
         let control_fd = *control_lock.deref();
         Self::raw_device_up(control_fd, adapter_id)
     }
-    pub fn device_down(&self, adapter_id: AdapterID) -> Result<(), HCISocketError> {
+    pub fn device_down(&self, adapter_id: AdapterID) -> Result<(), IOError> {
         let control_lock = self
             .control_fd
             .lock()
@@ -275,21 +262,21 @@ impl Manager {
         let control_fd = *control_lock.deref();
         Self::raw_device_down(control_fd, adapter_id)
     }
-    fn raw_device_down(ctl_fd: i32, adapter_id: AdapterID) -> Result<(), HCISocketError> {
+    fn raw_device_down(ctl_fd: i32, adapter_id: AdapterID) -> Result<(), IOError> {
         unsafe {
             ioctl::hci_device_down(ctl_fd, adapter_id.0 as nix::sys::ioctl::ioctl_param_type)
                 .map_err(hci_to_socket_error)?;
         }
         Ok(())
     }
-    fn raw_device_up(ctl_fd: i32, adapter_id: AdapterID) -> Result<(), HCISocketError> {
+    fn raw_device_up(ctl_fd: i32, adapter_id: AdapterID) -> Result<(), IOError> {
         unsafe {
             ioctl::hci_device_up(ctl_fd, adapter_id.0 as nix::sys::ioctl::ioctl_param_type)
                 .map_err(hci_to_socket_error)?;
         }
         Ok(())
     }
-    pub fn get_adapter_socket(&self, adapter_id: AdapterID) -> Result<HCISocket, HCISocketError> {
+    pub fn get_adapter_socket(&self, adapter_id: AdapterID) -> Result<HCISocket, IOError> {
         let control_lock = self
             .control_fd
             .lock()
@@ -301,77 +288,55 @@ impl Manager {
     }
 }
 
-#[cfg(feature = "bluez_async")]
-pub mod async_socket {
-    use super::HCISocket;
-    use crate::hci::stream::{Error, Filter, HCIFilterable};
-    use core::convert::TryFrom;
-    use core::pin::Pin;
-    use core::task::{Context, Poll};
-    use std::os::unix::io::AsRawFd;
-    use tokio::io::{AsyncRead, AsyncWrite};
-    impl TryFrom<HCISocket> for AsyncHCISocket {
-        type Error = std::io::Error;
+impl TryFrom<HCISocket> for AsyncHCISocket {
+    type Error = std::io::Error;
 
-        /// Returns `std::io::Error` if it can't bind the `UnixStream` to the tokio Event
-        /// loop. Usually safe to `.unwrap()/.expect()` unless bad file descriptor.
-        fn try_from(socket: HCISocket) -> Result<Self, Self::Error> {
-            Ok(AsyncHCISocket(tokio::net::UnixStream::from_std(
-                socket.into(),
-            )?))
-        }
-    }
-    pub struct AsyncHCISocket(pub tokio::net::UnixStream);
-    impl HCIFilterable for AsyncHCISocket {
-        fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
-            HCISocket::set_filter_raw(self.0.as_raw_fd(), filter)
-                .ok()
-                .ok_or(Error::IOError)
-        }
-
-        fn get_filter(self: Pin<&Self>) -> Result<Filter, Error> {
-            HCISocket::get_filter_raw(self.0.as_raw_fd())
-                .ok()
-                .ok_or(Error::IOError)
-        }
-    }
-    impl futures_io::AsyncRead for AsyncHCISocket {
-        fn poll_read(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &mut [u8],
-        ) -> Poll<Result<usize, std::io::Error>> {
-            Pin::new(&mut self.0).poll_read(cx, buf)
-        }
-    }
-    impl futures_io::AsyncWrite for AsyncHCISocket {
-        fn poll_write(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &[u8],
-        ) -> Poll<Result<usize, std::io::Error>> {
-            Pin::new(&mut self.0).poll_write(cx, buf)
-        }
-
-        fn poll_flush(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-        ) -> Poll<Result<(), std::io::Error>> {
-            Pin::new(&mut self.0).poll_flush(cx)
-        }
-
-        fn poll_close(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-        ) -> Poll<Result<(), std::io::Error>> {
-            Pin::new(&mut self.0).poll_shutdown(cx)
-        }
+    /// Returns `std::io::Error` if it can't bind the `UnixStream` to the tokio Event
+    /// loop. Usually safe to `.unwrap()/.expect()` unless bad file descriptor.
+    fn try_from(socket: HCISocket) -> Result<Self, Self::Error> {
+        Ok(AsyncHCISocket(tokio::net::UnixStream::from_std(
+            socket.into(),
+        )?))
     }
 }
-use crate::hci::stream::{Error, Filter, HCIFilterable, FILTER_LEN};
-use crate::BTAddress;
-use core::fmt::{Display, Formatter};
-use core::ops::Deref;
+pub struct AsyncHCISocket(pub tokio::net::UnixStream);
+impl HCIFilterable for AsyncHCISocket {
+    fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
+        HCISocket::set_filter_raw(self.0.as_raw_fd(), filter).map_err(Error::IOError)
+    }
 
-#[cfg(feature = "bluez_async")]
-pub use async_socket::AsyncHCISocket;
+    fn get_filter(self: Pin<&Self>) -> Result<Filter, Error> {
+        HCISocket::get_filter_raw(self.0.as_raw_fd()).map_err(Error::IOError)
+    }
+}
+impl HCIReader for AsyncHCISocket {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<Result<usize, Error>> {
+        use tokio::io::AsyncRead;
+        Pin::new(&mut self.0)
+            .poll_read(cx, buf)
+            .map_err(|e| Error::IOError(e.into()))
+    }
+}
+impl HCIWriter for AsyncHCISocket {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, Error>> {
+        use tokio::io::AsyncWrite;
+        Pin::new(&mut self.0)
+            .poll_write(cx, buf)
+            .map_err(|e| Error::IOError(e.into()))
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        use tokio::io::AsyncWrite;
+        Pin::new(&mut self.0)
+            .poll_flush(cx)
+            .map_err(|e| Error::IOError(e.into()))
+    }
+}

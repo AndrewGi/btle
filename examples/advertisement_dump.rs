@@ -73,13 +73,12 @@ pub async fn dump_usb() -> Result<(), btle::hci::adapter::Error> {
     dump_adapter(adapter).await
 }
 pub async fn dump_adapter<A: btle::hci::adapter::Adapter>(
-    mut adapter: A,
+    adapter: A,
 ) -> Result<(), btle::hci::adapter::Error> {
-    let adapter = unsafe { Pin::new_unchecked(&mut adapter) };
     let adapter = btle::hci::adapters::Adapter::new(adapter);
     let mut le = adapter.le();
     println!("resetting adapter...");
-    le.adapter_mut().reset().await?;
+    le.adapter.reset().await?;
     println!("settings scan parameters...");
     // Set BLE Scan parameters (when to scan, how long, etc)
     le.set_scan_parameters(le::scan::ScanParameters::DEFAULT)
