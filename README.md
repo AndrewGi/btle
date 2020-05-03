@@ -29,7 +29,8 @@ Supported GAP Roles so far:
 
 WIP Example (API may change later):
 ```rust
-let adapter = btle::hci::adapters::Adapter::new(adapter);
+pub async fn dump_adapter<A: btle::hci::adapter::Adapter>(adapter: A) -> Result<(), CLIError> {
+    let adapter = btle::hci::adapters::Adapter::new(adapter);
     let mut le = adapter.le();
     println!("resetting adapter...");
     le.adapter.reset().await?;
@@ -51,5 +52,5 @@ let adapter = btle::hci::adapters::Adapter::new(adapter);
             println!("report: {:?}", &report);
         }
     }
-
+}
 ```
