@@ -29,18 +29,14 @@ Supported GAP Roles so far:
 
 WIP Example (API may change later):
 ```rust
-pub async fn dump_adapter<A: btle::hci::adapter::Adapter>(
-    mut adapter: A,
-) -> Result<(), btle::hci::adapter::Error> {
-    let adapter = unsafe { Pin::new_unchecked(&mut adapter) };
-    let adapter = btle::hci::adapters::Adapter::new(adapter);
+let adapter = btle::hci::adapters::Adapter::new(adapter);
     let mut le = adapter.le();
     println!("resetting adapter...");
-    le.adapter_mut().reset().await?;
-
+    le.adapter.reset().await?;
     println!("settings scan parameters...");
     // Set BLE Scan parameters (when to scan, how long, etc)
-    le.set_scan_parameters(le::scan::ScanParameters::DEFAULT).await?;
+    le.set_scan_parameters(btle::le::scan::ScanParameters::DEFAULT)
+        .await?;
     // Enable scanning for advertisement packets.
     le.set_scan_enable(true, false).await?;
 
@@ -55,6 +51,5 @@ pub async fn dump_adapter<A: btle::hci::adapter::Adapter>(
             println!("report: {:?}", &report);
         }
     }
-}
 
 ```

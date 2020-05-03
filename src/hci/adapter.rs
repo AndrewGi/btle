@@ -87,7 +87,12 @@ impl Adapter for DummyAdapter {
     ) -> LocalBoxFuture<'s, Result<(), Error>> {
         unimplemented!("dummy adapter write event {:?}", packet)
     }
-
+    fn send_command<'a, 'c: 'a, Cmd: Command + 'c>(
+        &'a mut self,
+        _command: Cmd,
+    ) -> LocalBoxFuture<'a, Result<Cmd::Return, hci::adapter::Error>> {
+        unimplemented!("dummy send {:?}", Cmd::opcode())
+    }
     fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
         &'s mut self,
     ) -> LocalBoxFuture<'s, Result<EventPacket<S>, Error>> {
