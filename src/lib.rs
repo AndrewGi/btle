@@ -29,6 +29,7 @@ pub type BoxFuture<'a, T> = core::pin::Pin<Box<dyn core::future::Future<Output =
 pub type BoxStream<'a, T> = core::pin::Pin<Box<dyn Stream<Item = T> + 'a>>;
 extern crate core;
 pub mod bytes;
+pub mod channel;
 pub mod error;
 #[cfg(feature = "hci")]
 pub mod hci;
@@ -181,6 +182,34 @@ impl BTAddress {
         bytes.copy_from_slice(&self.0[..]);
         Ok(())
     }
+    pub fn address_type(self) -> AddressType {
+        let address_type_bits = (self.0[BT_ADDRESS_LEN - 1] & 0xC0) >> 6;
+        match address_type_bits {
+            0b00 => AddressType::NonResolvablePrivate,
+            0b01 => AddressType::ResolvablePrivateAddress,
+            0b11 => AddressType::StaticDevice,
+            // Because of the mask above, _ should only match 0b10 (RFU).
+            _ => AddressType::RFU,
+        }
+    }
+    /// Returns `hash` (24-bit) and `prand` (24-bit) of the resolvable private address.
+    /// `prand` includes the address type bits.
+    pub fn private_address_parts(self) -> Option<(u32, u32)> {
+        match self.address_type() {
+            AddressType::ResolvablePrivateAddress => Some((
+                u32::from_le_bytes([self.0[0], self.0[1], self.0[2], 0]),
+                u32::from_le_bytes([self.0[3], self.0[4], self.0[5], 0]),
+            )),
+            _ => None,
+        }
+    }
+}
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug, Hash)]
+pub enum AddressType {
+    NonResolvablePrivate = 0b00,
+    ResolvablePrivateAddress = 0b01,
+    RFU = 0b10,
+    StaticDevice = 0b11,
 }
 /// 16-bit Bluetooth Company Identifier. Companies are assigned unique Company Identifiers to
 /// Bluetooth SIG members requesting them. [See here for more](https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers/)
