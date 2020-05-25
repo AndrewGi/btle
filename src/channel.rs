@@ -9,12 +9,15 @@ impl Index {
         assert!(index < Self::INDEX_MAX, "index overflow `{:?}`", index);
         Index(index)
     }
-    pub fn new_clamped(index: u8) -> Index {
+    pub fn new_checked(index: u8) -> Option<Index> {
         if index > Self::INDEX_MAX {
-            Index::MAX
+            None
         } else {
-            Index(index)
+            Some(Index(index))
         }
+    }
+    pub fn new_clamped(index: u8) -> Index {
+        Self::new_checked(index).unwrap_or(Self::MAX)
     }
     /// Returns channel frequency in MHz.
     /// # Example
