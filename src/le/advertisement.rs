@@ -118,6 +118,11 @@ pub trait AdStructureType {
     fn ad_type(&self) -> AdType;
     fn byte_len(&self) -> usize;
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
+    fn pack_into_storage<S: Storage<u8>>(&self) -> Result<S, PackError> {
+        let mut buf = S::with_size(self.byte_len());
+        self.pack_into(buf.as_mut())?;
+        Ok(buf)
+    }
 }
 pub trait UnpackableAdStructType: AdStructureType {
     fn unpack_from(ad_type: AdType, buf: &[u8]) -> Result<Self, PackError>

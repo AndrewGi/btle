@@ -30,6 +30,8 @@ pub type BoxStream<'a, T> = core::pin::Pin<Box<dyn Stream<Item = T> + 'a>>;
 extern crate core;
 pub mod bytes;
 pub mod channel;
+#[cfg(feature = "classic")]
+pub mod classic;
 pub mod error;
 #[cfg(feature = "hci")]
 pub mod hci;

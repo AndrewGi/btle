@@ -203,6 +203,13 @@ pub struct StaticBuf<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy
     _marker: core::marker::PhantomData<T>,
 }
 impl<T: Copy, ArrayBuf: AsRef<[T]> + AsMut<[T]> + Default + Copy> StaticBuf<T, ArrayBuf> {
+    pub fn new() -> Self {
+        Self {
+            buf: ArrayBuf::default(),
+            len: 0,
+            _marker: core::marker::PhantomData,
+        }
+    }
     /// Returns the maximum size the `StaticBuf` can hold.
     /// # Examples
     /// ```
