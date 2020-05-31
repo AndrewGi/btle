@@ -27,8 +27,8 @@ impl AdvertisingInterval {
         );
         AdvertisingInterval(interval)
     }
-    pub fn as_microseconds(self) -> u32 {
-        u32::from(u16::from(self)) * 625
+    pub const fn as_microseconds(self) -> u32 {
+        self.0 as u32 * 625
     }
 }
 impl Default for AdvertisingInterval {

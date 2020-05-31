@@ -2,7 +2,7 @@ use crate::hci::command::Command;
 use crate::hci::event::{CommandComplete, StatusReturn};
 use crate::hci::{Opcode, OCF, OGF};
 use crate::PackError;
-use std::convert::TryInto;
+use core::convert::TryInto;
 
 pub enum ControllerBasebandOpcode {
     SetEventMask = 0x0001,

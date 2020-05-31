@@ -179,6 +179,9 @@ pub const MAX_ADV_LEN: usize = 31;
 #[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Default, Hash, Debug)]
 pub struct RawAdvertisement<Buf = StaticAdvBuffer>(pub Buf);
 impl RawAdvertisement<StaticAdvBuffer> {
+    pub fn new() -> RawAdvertisement<StaticAdvBuffer> {
+        RawAdvertisement(StaticBuf::new())
+    }
     /// Inserts a `AdStructure` into a `RawAdvertisement`
     pub fn insert<AdStruct: AdStructureType>(
         &mut self,
