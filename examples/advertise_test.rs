@@ -3,11 +3,8 @@ use btle::le;
 use btle::le::advertisement::{AdStructureType, StaticAdvBuffer};
 use btle::le::advertisement_structures::local_name::CompleteLocalName;
 use btle::le::advertiser::AdvertisingInterval;
-use btle::le::report::ReportInfo;
-use futures_util::stream::StreamExt;
 #[allow(unused_imports)]
-use std::convert::{TryFrom, TryInto};
-use std::pin::Pin;
+use core::convert::{TryFrom, TryInto};
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = tokio::runtime::Builder::new()
@@ -26,7 +23,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await;
         #[cfg(feature = "hci_usb")]
-        dump_usb().await;
+        dump_usb().await?;
         #[cfg(not(unix))]
         dump_not_supported()?;
         Ok(())
@@ -77,7 +74,9 @@ pub async fn dump_usb() -> Result<(), btle::hci::adapter::Error> {
 }
 /// Block and wait for an enter press on `StdIn`. Similar to C++ `std::cin.ignore()`.
 pub fn cin_ignore() {
-    std::io::stdin().read_line(&mut String::new());
+    std::io::stdin()
+        .read_line(&mut String::new())
+        .expect("cin_ignore failed");
 }
 pub async fn dump_adapter<A: btle::hci::adapter::Adapter>(
     adapter: A,

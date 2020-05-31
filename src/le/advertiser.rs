@@ -1,7 +1,9 @@
 //! Generic BLE Advertiser (WIP)
+use crate::hci::adapter;
 use crate::BTAddress;
 use crate::ConversionError;
 use core::convert::TryFrom;
+use futures_util::future::LocalBoxFuture;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct AdvertisingInterval(u16);
@@ -289,19 +291,17 @@ impl Default for AdvertisingParameters {
         Self::DEFAULT
     }
 }
-/*
 pub trait Advertiser {
     fn set_advertising_enable<'a>(
         &'a mut self,
         is_enabled: bool,
-    ) -> BoxFuture<'a, Result<(), adapter::Error>>;
+    ) -> LocalBoxFuture<'a, Result<(), adapter::Error>>;
     fn set_advertising_parameters<'a>(
         &'a mut self,
         advertising_parameters: AdvertisingParameters,
-    ) -> BoxFuture<'a, Result<(), adapter::Error>>;
+    ) -> LocalBoxFuture<'a, Result<(), adapter::Error>>;
     fn set_advertising_data<'d, 'a: 'd>(
         &'a mut self,
         data: &'d [u8],
-    ) -> BoxFuture<'d, Result<(), adapter::Error>>;
+    ) -> LocalBoxFuture<'d, Result<(), adapter::Error>>;
 }
-*/

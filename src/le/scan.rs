@@ -1,6 +1,10 @@
 use crate::ConversionError;
 
+use crate::hci::adapter;
+use crate::le::report::ReportInfo;
 use core::convert::TryFrom;
+use futures_util::future::LocalBoxFuture;
+use futures_util::stream::LocalBoxStream;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum ScanningFilterPolicy {
@@ -154,22 +158,22 @@ impl Default for ScanParameters {
         Self::DEFAULT
     }
 }
-/*
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum ObserverError {
     AdapterError(adapter::Error),
 }
-impl Error for ObserverError {}
+impl crate::error::Error for ObserverError {}
 pub trait Observer {
     fn set_scan_parameters<'a>(
         &'a mut self,
         scan_parameters: ScanParameters,
-    ) -> BoxFuture<'a, Result<(), adapter::Error>>;
+    ) -> LocalBoxFuture<'a, Result<(), adapter::Error>>;
     fn set_scan_enable<'a>(
         &'a mut self,
         is_enabled: bool,
         filter_duplicates: bool,
-    ) -> BoxFuture<'a, Result<(), adapter::Error>>;
-    fn advertisement_stream<'a>(&'a mut self) -> BoxStream<'a, Result<ReportInfo, adapter::Error>>;
+    ) -> LocalBoxFuture<'a, Result<(), adapter::Error>>;
+    fn advertisement_stream<'a>(
+        &'a mut self,
+    ) -> LocalBoxStream<'a, Result<ReportInfo, adapter::Error>>;
 }
-*/
