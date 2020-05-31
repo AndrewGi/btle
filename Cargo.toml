@@ -27,7 +27,7 @@ libc = {version = "0.2.66", optional = true}
 tokio = {version = "0.2.13", optional = true, default_features = false}
 rusb = {version = "0.5.5", optional = true}
 futures-util = {version = "0.3.4", default_features = false, features=["alloc"]}
-serde = {version = "1.0.104", default-features = false, features = ["derive"], optional = true }
+serde = {version = "1.0", default-features = false, features = ["derive"], optional = true }
 [[example]]
 name = "advertisement_dump"
 
