@@ -2,6 +2,8 @@ use crate::hci::adapters::Adapter;
 use crate::hci::baseband::{EventMask, EventMaskFlags};
 use crate::hci::le::mask::{MetaEventMask, SetMetaEventMask};
 use crate::hci::le::MetaEventCode;
+use crate::le::advertiser::Advertiser;
+use crate::le::scan::Observer;
 use crate::{
     bytes::Storage,
     hci::{
@@ -19,7 +21,9 @@ use crate::{
     Stream,
 };
 use core::convert::TryFrom;
-use futures_util::StreamExt;
+use futures_util::future::LocalBoxFuture;
+use futures_util::stream::LocalBoxStream;
+use futures_util::{FutureExt, StreamExt};
 
 pub struct LEAdapter<A: adapter::Adapter> {
     pub adapter: Adapter<A>,
@@ -202,19 +206,19 @@ impl<A: adapter::Adapter> LEAdapter<A> {
             .flatten())
     }
 }
-/*
-impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> Advertiser for LEAdapter<A, S> {
+
+impl<A: adapter::Adapter> Advertiser for LEAdapter<A> {
     fn set_advertising_enable(
         &mut self,
         is_enabled: bool,
-    ) -> BoxFuture<Result<(), adapter::Error>> {
+    ) -> LocalBoxFuture<Result<(), adapter::Error>> {
         Box::pin(LEAdapter::set_advertising_enable(self, is_enabled))
     }
 
     fn set_advertising_parameters(
         &mut self,
         advertisement_parameters: AdvertisingParameters,
-    ) -> BoxFuture<Result<(), adapter::Error>> {
+    ) -> LocalBoxFuture<Result<(), adapter::Error>> {
         Box::pin(LEAdapter::set_advertising_parameters(
             self,
             advertisement_parameters,
@@ -224,8 +228,50 @@ impl<A: adapter::Adapter, S: Deref<Target = A> + DerefMut> Advertiser for LEAdap
     fn set_advertising_data<'s, 'b: 's>(
         &'b mut self,
         data: &'s [u8],
-    ) -> BoxFuture<'s, Result<(), adapter::Error>> {
+    ) -> LocalBoxFuture<'s, Result<(), adapter::Error>> {
         Box::pin(LEAdapter::set_advertising_data(self, data))
     }
 }
-*/
+
+impl<A: adapter::Adapter> Observer for LEAdapter<A> {
+    fn set_scan_parameters<'a>(
+        &'a mut self,
+        scan_parameters: ScanParameters,
+    ) -> LocalBoxFuture<'a, Result<(), adapter::Error>> {
+        Box::pin(self.set_scan_parameters(scan_parameters))
+    }
+
+    fn set_scan_enable<'a>(
+        &'a mut self,
+        is_enabled: bool,
+        filter_duplicates: bool,
+    ) -> LocalBoxFuture<'a, Result<(), adapter::Error>> {
+        Box::pin(self.set_scan_enable(is_enabled, filter_duplicates))
+    }
+
+    fn advertisement_stream<'a>(
+        &'a mut self,
+    ) -> LocalBoxFuture<
+        'a,
+        Result<
+            LocalBoxStream<'a, Result<ReportInfo<StaticAdvBuffer>, adapter::Error>>,
+            adapter::Error,
+        >,
+    > {
+        Box::pin(
+            self.advertisement_stream::<Box<[ReportInfo<StaticAdvBuffer>]>>()
+                .map(|r| {
+                    r.map(|s| {
+                        Box::pin(s)
+                            as core::pin::Pin<
+                                Box<
+                                    dyn Stream<
+                                        Item = Result<ReportInfo<StaticAdvBuffer>, adapter::Error>,
+                                    >,
+                                >,
+                            >
+                    })
+                }),
+        )
+    }
+}

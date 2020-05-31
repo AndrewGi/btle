@@ -1,6 +1,7 @@
 use crate::ConversionError;
 
 use crate::hci::adapter;
+use crate::le::advertisement::StaticAdvBuffer;
 use crate::le::report::ReportInfo;
 use core::convert::TryFrom;
 use futures_util::future::LocalBoxFuture;
@@ -175,5 +176,11 @@ pub trait Observer {
     ) -> LocalBoxFuture<'a, Result<(), adapter::Error>>;
     fn advertisement_stream<'a>(
         &'a mut self,
-    ) -> LocalBoxStream<'a, Result<ReportInfo, adapter::Error>>;
+    ) -> LocalBoxFuture<
+        'a,
+        Result<
+            LocalBoxStream<'a, Result<ReportInfo<StaticAdvBuffer>, adapter::Error>>,
+            adapter::Error,
+        >,
+    >;
 }
