@@ -79,8 +79,10 @@ pub trait Adapter {
         &'s mut self,
     ) -> LocalBoxFuture<'s, Result<EventPacket<S>, Error>>;
 }
+
 /// Dummy HCI Adapter that panics with `unimplemented!` on any function call.
 /// Just to make testing easier.
+#[derive(Copy, Clone, Debug)]
 pub struct DummyAdapter;
 impl Adapter for DummyAdapter {
     fn write_command<'s, 'p: 's>(
