@@ -183,4 +183,20 @@ pub trait Observer {
             adapter::Error,
         >,
     >;
+    /// Optimize `advertisement_stream` by avoiding setting HCI event masks. Defaults to calling
+    /// `advertisement_stream()`.
+    /// # Caution
+    /// This function does not guarantee that the event masks won't be changed! By default, this
+    /// function doesn't do anything different than `advertisement_stream()`.
+    fn advertisement_stream_without_mask<'a>(
+        &'a mut self,
+    ) -> LocalBoxFuture<
+        'a,
+        Result<
+            LocalBoxStream<'a, Result<ReportInfo<StaticAdvBuffer>, adapter::Error>>,
+            adapter::Error,
+        >,
+    > {
+        self.advertisement_stream()
+    }
 }
