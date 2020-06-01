@@ -129,14 +129,11 @@ impl<A: adapter::Adapter> LEAdapter<A> {
             .error()?;
         Ok(())
     }
-    pub async fn meta_event_stream<'a, 'b: 'a, Buf: Storage<u8> + 'b>(
+    /// Returns a Stream of `RawMetaEvent`s without setting the HCI `EventMask`.
+    pub fn meta_event_stream_without_mask<'a, 'b: 'a, Buf: Storage<u8> + 'b>(
         &'a mut self,
-    ) -> Result<impl Stream<Item = Result<RawMetaEvent<Buf>, adapter::Error>> + 'a, adapter::Error>
-    {
-        let mut mask = EventMask::zeroed();
-        mask.enable_event(EventMaskFlags::LEMetaEvent);
-        self.adapter.set_event_mask(mask).await?;
-        Ok(self.adapter.hci_event_stream().filter_map(
+    ) -> impl Stream<Item = Result<RawMetaEvent<Buf>, adapter::Error>> + 'a {
+        self.adapter.hci_event_stream().filter_map(
             |p: Result<EventPacket<Buf>, adapter::Error>| async move {
                 let event = match p {
                     Ok(event) => event,
@@ -151,7 +148,17 @@ impl<A: adapter::Adapter> LEAdapter<A> {
                     None
                 }
             },
-        ))
+        )
+    }
+    /// Enables `RawMetaEvents` from the HCI (using an event mask) and returns a Stream of them.
+    pub async fn meta_event_stream<'a, 'b: 'a, Buf: Storage<u8> + 'b>(
+        &'a mut self,
+    ) -> Result<impl Stream<Item = Result<RawMetaEvent<Buf>, adapter::Error>> + 'a, adapter::Error>
+    {
+        let mut mask = EventMask::zeroed();
+        mask.enable_event(EventMaskFlags::LEMetaEvent);
+        self.adapter.set_event_mask(mask).await?;
+        Ok(self.meta_event_stream_without_mask())
     }
     pub async fn advertising_report_stream<
         'a,
@@ -163,10 +170,22 @@ impl<A: adapter::Adapter> LEAdapter<A> {
         impl Stream<Item = Result<AdvertisingReport<Buf>, adapter::Error>> + 'a,
         adapter::Error,
     > {
-        let mut mask = MetaEventMask::zeroed();
-        mask.enable_event(MetaEventCode::AdvertisingReport);
-        self.set_meta_event_mask(mask).await?;
-        Ok(self.meta_event_stream().await?.filter_map(
+        let mut meta_mask = MetaEventMask::zeroed();
+        meta_mask.enable_event(MetaEventCode::AdvertisingReport);
+        let mut event_mask = EventMask::zeroed();
+        event_mask.enable_event(EventMaskFlags::LEMetaEvent);
+        self.adapter.set_event_mask(event_mask).await?;
+        self.set_meta_event_mask(meta_mask).await?;
+        Ok(self.advertising_report_stream_without_mask())
+    }
+    pub fn advertising_report_stream_without_mask<
+        'a,
+        'b: 'a,
+        Buf: Storage<ReportInfo<StaticAdvBuffer>> + 'b,
+    >(
+        &'a mut self,
+    ) -> impl Stream<Item = Result<AdvertisingReport<Buf>, adapter::Error>> + 'a {
+        self.meta_event_stream_without_mask().filter_map(
             |meta_event: Result<RawMetaEvent<Box<[u8]>>, adapter::Error>| async move {
                 // We expect only AdvertisingReport Meta events to get through because the HCI
                 // filter should be set for that. Otherwise if a non-`AdvertisingReport`
@@ -178,7 +197,7 @@ impl<A: adapter::Adapter> LEAdapter<A> {
                         .map_err(|e| adapter::Error::StreamError(StreamError::EventError(e)))
                 }))
             },
-        ))
+        )
     }
     pub async fn advertisement_stream<
         'a,
