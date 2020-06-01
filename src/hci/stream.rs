@@ -144,6 +144,7 @@ pub trait HCIReader: Unpin {
 }
 /// HCI Stream. Wraps the `poll_read` and `poll_write` methods of [`HCIReader`] and [`HCIWriter`]
 /// to provide the [`Stream::read_packet`] and [`Stream::send_command`] functions.
+#[derive(Clone, Debug)]
 pub struct Stream<S: HCIReader, B: Deref<Target = S>> {
     pub stream: Pin<B>,
 }

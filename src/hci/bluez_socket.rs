@@ -124,6 +124,7 @@ struct SockaddrHCI {
 /// Wrapper for a BlueZ HCI Stream. Uses Unix Sockets. `HCISocket`'s have a special filter on them
 /// for HCI Events so that is why they are wrapped. Besides the filter, they are just byte streams
 /// that need to have the Events and Commands abstracted over them.
+#[derive(Debug)]
 pub struct HCISocket(UnixStream);
 /// Turns an libc `ERRNO` error number into a `IOError`.
 pub fn handle_libc_error(i: RawFd) -> Result<i32, IOError> {
@@ -231,6 +232,7 @@ fn hci_to_socket_error(err: nix::Error) -> IOError {
         nix::Error::UnsupportedOperation => IOError::NotImplemented,
     }
 }
+#[derive(Debug)]
 pub struct Manager {
     control_fd: Mutex<i32>,
 }
@@ -299,6 +301,7 @@ impl TryFrom<HCISocket> for AsyncHCISocket {
         )?))
     }
 }
+#[derive(Debug)]
 pub struct AsyncHCISocket(pub tokio::net::UnixStream);
 impl HCIFilterable for AsyncHCISocket {
     fn set_filter(self: Pin<&mut Self>, filter: &Filter) -> Result<(), Error> {
