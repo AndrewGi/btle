@@ -37,6 +37,7 @@ pub mod error;
 pub mod hci;
 pub mod le;
 pub mod uri;
+pub mod uuid;
 #[cfg(feature = "winrt_drives")]
 pub mod windows;
 

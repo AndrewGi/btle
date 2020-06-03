@@ -4,6 +4,7 @@ pub mod mask;
 pub mod messages;
 pub mod report;
 pub use messages::*;
+pub mod connection;
 pub mod random;
 pub mod scan;
 use crate::bytes::Storage;
@@ -18,7 +19,8 @@ use core::convert::TryFrom;
 #[repr(u16)]
 pub enum LEControllerOpcode {
     SetEventMask = 0x0001,
-    ReadBufferSize = 0x0002,
+    ReadBufferSizeV1 = 0x0002,
+    ReadBufferSizeV2 = 0x0060,
     ReadLocalSupportedFeatures = 0x0003,
     SetRandomAddress = 0x0005,
     SetAdvertisingParameters = 0x0006,
@@ -54,7 +56,8 @@ impl TryFrom<OCF> for LEControllerOpcode {
     fn try_from(ocf: OCF) -> Result<Self, Self::Error> {
         match u16::from(ocf) {
             0x0001 => Ok(LEControllerOpcode::SetEventMask),
-            0x0002 => Ok(LEControllerOpcode::ReadBufferSize),
+            0x0060 => Ok(LEControllerOpcode::ReadBufferSizeV1),
+            0x0002 => Ok(LEControllerOpcode::ReadBufferSizeV2),
             0x0003 => Ok(LEControllerOpcode::ReadLocalSupportedFeatures),
             0x0005 => Ok(LEControllerOpcode::SetRandomAddress),
             0x0006 => Ok(LEControllerOpcode::SetAdvertisingParameters),

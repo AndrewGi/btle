@@ -2,5 +2,8 @@ pub mod adapter;
 pub mod advertisement;
 pub mod advertisement_structures;
 pub mod advertiser;
+pub mod att;
+pub mod gatt;
+pub mod link;
 pub mod report;
 pub mod scan;
