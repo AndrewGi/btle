@@ -1,4 +1,4 @@
-use crate::hci::adapters::Adapter;
+use crate::hci::adapters::{Adapter, UnrecognizedEventHandler};
 use crate::hci::baseband::{EventMask, EventMaskFlags};
 use crate::hci::le::mask::{MetaEventMask, SetMetaEventMask};
 use crate::hci::le::MetaEventCode;
@@ -25,11 +25,11 @@ use futures_util::future::LocalBoxFuture;
 use futures_util::stream::LocalBoxStream;
 use futures_util::{FutureExt, StreamExt};
 
-pub struct LEAdapter<A: adapter::Adapter> {
-    pub adapter: Adapter<A>,
+pub struct LEAdapter<A: adapter::Adapter, H: UnrecognizedEventHandler> {
+    pub adapter: Adapter<A, H>,
 }
-impl<A: adapter::Adapter> LEAdapter<A> {
-    pub fn new(adapter: Adapter<A>) -> Self {
+impl<A: adapter::Adapter, H: UnrecognizedEventHandler> LEAdapter<A, H> {
+    pub fn new(adapter: Adapter<A, H>) -> Self {
         Self { adapter }
     }
     /// Read the advertising channel TX power in dBm. See [`le::advertise::TxPowerLevel`] for more.
@@ -105,6 +105,40 @@ impl<A: adapter::Adapter> LEAdapter<A> {
         r.params.status.error()?;
         Ok(r.params.random_bytes)
     }
+    /// Returns Max number of ACL Packets and Packet length.
+    pub async fn read_buffer_size_v1(
+        &mut self,
+    ) -> Result<le::connection::BufferSizeV1, adapter::Error> {
+        let r = self
+            .adapter
+            .hci_send_command(le::commands::ReadBufferSizeV1())
+            .await?;
+        r.params.status.error()?;
+        Ok(r.params)
+    }
+    /// Returns max number of ACL packets and packet length PLUS Max number of Isochronous packets
+    /// and packet length.
+    pub async fn read_buffer_size_v2(
+        &mut self,
+    ) -> Result<le::connection::BufferSizeV2, adapter::Error> {
+        let r = self
+            .adapter
+            .hci_send_command(le::commands::ReadBufferSizeV2())
+            .await?;
+        r.params.status.error()?;
+        Ok(r.params)
+    }
+    pub async fn set_scan_response_data(&mut self, data: &[u8]) -> Result<(), adapter::Error> {
+        let rsp =
+            le::commands::SetScanResponseData::try_from(data).map_err(StreamError::CommandError)?;
+        self.adapter
+            .hci_send_command(rsp)
+            .await?
+            .params
+            .status
+            .error()?;
+        Ok(())
+    }
     pub async fn set_meta_event_mask(&mut self, mask: MetaEventMask) -> Result<(), adapter::Error> {
         self.adapter
             .hci_send_command(SetMetaEventMask(mask))
@@ -114,6 +148,7 @@ impl<A: adapter::Adapter> LEAdapter<A> {
             .error()?;
         Ok(())
     }
+
     /// Set advertising data (0-31 bytes).
     /// # Errors
     /// Returns `adapter::Error::BadParameter` if `data.len() > MAX_ADV_LEN` (31).
@@ -226,7 +261,7 @@ impl<A: adapter::Adapter> LEAdapter<A> {
     }
 }
 
-impl<A: adapter::Adapter> Advertiser for LEAdapter<A> {
+impl<A: adapter::Adapter, H: UnrecognizedEventHandler> Advertiser for LEAdapter<A, H> {
     fn set_advertising_enable(
         &mut self,
         is_enabled: bool,
@@ -252,7 +287,7 @@ impl<A: adapter::Adapter> Advertiser for LEAdapter<A> {
     }
 }
 
-impl<A: adapter::Adapter> Observer for LEAdapter<A> {
+impl<A: adapter::Adapter, H: UnrecognizedEventHandler> Observer for LEAdapter<A, H> {
     fn set_scan_parameters<'a>(
         &'a mut self,
         scan_parameters: ScanParameters,

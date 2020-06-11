@@ -408,14 +408,6 @@ impl Event for CommandStatus {
         COMMAND_STATUS_LEN
     }
 
-    fn event_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
-        PackError::expect_length(COMMAND_STATUS_LEN, buf)?;
-        self.opcode.pack(&mut buf[2..4])?;
-        buf[0] = self.status.into();
-        buf[1] = self.num_command_packets;
-        Ok(())
-    }
-
     fn event_unpack_from(buf: &[u8]) -> Result<Self, PackError>
     where
         Self: Sized,
@@ -429,5 +421,26 @@ impl Event for CommandStatus {
             num_command_packets: buf[1],
             opcode,
         })
+    }
+
+    fn event_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(COMMAND_STATUS_LEN, buf)?;
+        self.opcode.pack(&mut buf[2..4])?;
+        buf[0] = self.status.into();
+        buf[1] = self.num_command_packets;
+        Ok(())
+    }
+}
+
+impl ReturnEvent for CommandStatus {
+    fn command_opcode(&self) -> Opcode {
+        self.opcode
+    }
+    fn guess_command_opcode(buf: &[u8]) -> Option<Opcode> {
+        if buf.len() >= COMMAND_STATUS_LEN {
+            Opcode::unpack(&buf[2..4]).ok()
+        } else {
+            None
+        }
     }
 }

@@ -19,5 +19,7 @@ pub trait UnpackablePDU: PackablePDU {
         Self: Sized;
 }
 
-pub trait Request {}
-pub trait Response {}
+pub trait Request: PackablePDU {
+    type Response: Response;
+}
+pub trait Response: PackablePDU {}

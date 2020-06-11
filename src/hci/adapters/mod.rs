@@ -9,21 +9,61 @@ use crate::hci::command::Command;
 use crate::hci::event::EventPacket;
 use crate::Stream;
 
-pub struct Adapter<A: adapter::Adapter> {
-    pub adapter: A,
+// TODO: Make this more generic
+pub trait UnrecognizedEventHandler {
+    type Buf: Storage<u8>;
+    fn handle(&mut self, event: EventPacket<Self::Buf>) -> Result<(), adapter::Error>;
 }
-impl<A: adapter::Adapter> Adapter<A> {
-    pub fn new(adapter: A) -> Self {
-        Self { adapter }
+pub struct DummyUnrecognizedEventHandler<Buf = Box<[u8]>>(core::marker::PhantomData<Buf>);
+impl<Buf> DummyUnrecognizedEventHandler<Buf> {
+    pub const fn new() -> Self {
+        Self {
+            0: core::marker::PhantomData,
+        }
     }
-    pub fn le(self) -> le::LEAdapter<A> {
+}
+impl<Buf: Storage<u8>> UnrecognizedEventHandler for DummyUnrecognizedEventHandler<Buf> {
+    type Buf = Buf;
+
+    fn handle(&mut self, event: EventPacket<Buf>) -> Result<(), adapter::Error> {
+        // Ignore the event
+        core::mem::drop(event);
+        Ok(())
+    }
+}
+pub struct Adapter<A: adapter::Adapter, H: UnrecognizedEventHandler> {
+    pub adapter: A,
+    pub event_handler: H,
+}
+impl<A: adapter::Adapter> Adapter<A, DummyUnrecognizedEventHandler<Box<[u8]>>> {
+    pub fn new(adapter: A) -> Self {
+        Adapter {
+            adapter,
+            event_handler: DummyUnrecognizedEventHandler::new(),
+        }
+    }
+}
+impl<A: adapter::Adapter, H: UnrecognizedEventHandler> Adapter<A, H> {
+    pub fn new_with_handler(adapter: A, event_handler: H) -> Self {
+        Self {
+            adapter,
+            event_handler,
+        }
+    }
+    pub fn le(self) -> le::LEAdapter<A, H> {
         LEAdapter::new(self)
     }
     pub async fn hci_send_command<'a, 'c: 'a, Cmd: Command + 'c>(
         &mut self,
         cmd: Cmd,
     ) -> Result<Cmd::Return, adapter::Error> {
-        self.adapter.send_command(cmd).await
+        let event_handler = &mut self.event_handler;
+        adapter::send_command::<_, _, H::Buf, _>(
+            &mut self.adapter,
+            cmd,
+            Some(|e| event_handler.handle(e)),
+        )
+        .await
     }
     pub async fn hci_read_event<Buf: Storage<u8>>(
         &mut self,

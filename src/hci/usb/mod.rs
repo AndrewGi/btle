@@ -5,7 +5,7 @@ pub mod supported;
 
 use crate::error::IOError;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct Error(pub IOError);
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

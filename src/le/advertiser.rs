@@ -61,6 +61,7 @@ pub enum AdvertisingType {
     AdvDirectIndLowDutyCycle = 0x04,
 }
 impl AdvertisingType {
+    pub const BYTE_LEN: usize = 1;
     pub const DEFAULT: AdvertisingType = AdvertisingType::AdvInd;
 }
 impl Default for AdvertisingType {
@@ -93,6 +94,7 @@ pub enum PeerAddressType {
     Random = 0x01,
 }
 impl PeerAddressType {
+    pub const BYTE_LEN: usize = 1;
     pub const DEFAULT: PeerAddressType = PeerAddressType::Public;
 }
 impl Default for PeerAddressType {

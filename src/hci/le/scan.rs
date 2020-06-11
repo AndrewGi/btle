@@ -6,6 +6,7 @@ use crate::hci::le::LEControllerOpcode;
 use crate::hci::Opcode;
 use crate::le::scan::ScanParameters;
 use crate::PackError;
+use core::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SetScanEnable {
@@ -97,5 +98,82 @@ impl Command for SetScanParameters {
         Self: Sized,
     {
         unimplemented!()
+    }
+}
+pub const MAX_RESPONSE_DATA_LEN: usize = 31;
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+pub struct SetScanResponseData {
+    len: u8,
+    data: [u8; MAX_RESPONSE_DATA_LEN],
+}
+impl SetScanResponseData {
+    pub const BYTE_LEN: usize = MAX_RESPONSE_DATA_LEN + 1;
+    pub const OPCODE: LEControllerOpcode = LEControllerOpcode::SetScanResponseData;
+    pub const ZEROED: SetScanResponseData = SetScanResponseData {
+        len: 0,
+        data: [0_u8; MAX_RESPONSE_DATA_LEN],
+    };
+    pub fn from_slice(data: &[u8]) -> Option<SetScanResponseData> {
+        let data_len: u8 = data.as_ref().len().try_into().ok()?;
+        if usize::from(data_len) > MAX_RESPONSE_DATA_LEN {
+            None
+        } else {
+            let mut buf = [0_u8; MAX_RESPONSE_DATA_LEN];
+            buf[..usize::from(data_len)].copy_from_slice(data);
+            Some(SetScanResponseData {
+                len: data_len,
+                data: buf,
+            })
+        }
+    }
+}
+impl<'a> TryFrom<&'a [u8]> for SetScanResponseData {
+    type Error = PackError;
+
+    fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
+        let len = value.len();
+        Self::from_slice(value).ok_or(PackError::BadLength {
+            expected: MAX_RESPONSE_DATA_LEN,
+            got: len,
+        })
+    }
+}
+impl AsRef<[u8]> for SetScanResponseData {
+    fn as_ref(&self) -> &[u8] {
+        &self.data[..usize::from(self.len)]
+    }
+}
+impl AsMut<[u8]> for SetScanResponseData {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.data[..usize::from(self.len)]
+    }
+}
+impl Command for SetScanResponseData {
+    type Return = CommandComplete<StatusReturn>;
+
+    fn opcode() -> Opcode {
+        Self::OPCODE.into()
+    }
+
+    fn byte_len(&self) -> usize {
+        Self::BYTE_LEN
+    }
+
+    fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
+        PackError::expect_length(Self::BYTE_LEN, buf)?;
+        buf[0] = self.len;
+        buf[1..].copy_from_slice(self.data.as_ref());
+        Ok(())
+    }
+
+    fn unpack_from(buf: &[u8]) -> Result<Self, PackError>
+    where
+        Self: Sized,
+    {
+        PackError::expect_length(Self::BYTE_LEN, buf)?;
+        let len = buf[0];
+        let mut data = [0_u8; MAX_RESPONSE_DATA_LEN];
+        data.copy_from_slice(&buf[1..]);
+        Ok(SetScanResponseData { len, data })
     }
 }

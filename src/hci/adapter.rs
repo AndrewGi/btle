@@ -2,7 +2,7 @@ use crate::bytes::Storage;
 use crate::error::IOError;
 use crate::hci;
 use crate::hci::command::{Command, CommandPacket};
-use crate::hci::event::{EventPacket, StaticHCIBuffer};
+use crate::hci::event::EventPacket;
 use crate::hci::stream::HCI_EVENT_READ_TRIES;
 use crate::hci::StreamError;
 use futures_util::future::LocalBoxFuture;
@@ -51,45 +51,7 @@ pub trait Adapter {
         &'s mut self,
         packet: CommandPacket<&'p [u8]>,
     ) -> LocalBoxFuture<'s, Result<(), Error>>;
-    /// Send a HCI Command
-    /// With `Box`ing overhead, it takes around `150-200us` to send the command and `400-500us` to
-    /// receive the status. Some commands (like resetting the HCI adapter) take longer (resetting
-    /// took could up to `3ms` for example)
-    fn send_command<'a, 'c: 'a, Cmd: Command + 'c>(
-        &'a mut self,
-        command: Cmd,
-    ) -> LocalBoxFuture<'a, Result<Cmd::Return, hci::adapter::Error>> {
-        Box::pin(async move {
-            // `StaticBuf` because we're boxing the future anyways so while waiting/pending, we
-            // won't take up any stack space.
-            type Buf = StaticHCIBuffer;
-            // Pack Command
-            let send_command_start = std::time::Instant::now();
-            self.write_command(
-                command
-                    .pack_command_packet::<Buf>()
-                    .map_err(StreamError::CommandError)?
-                    .as_ref(),
-            )
-            .await?;
-            let send_command_end = std::time::Instant::now();
-            for _try_i in 0..HCI_EVENT_READ_TRIES {
-                let event: EventPacket<Buf> = self.read_event::<Buf>().await?;
-                if let Some(ret) =
-                    Cmd::unpack_return(event.as_ref()).map_err(StreamError::EventError)?
-                {
-                    let status_end = std::time::Instant::now();
-                    println!(
-                        "command time: `{:?}`  status_time: `{:?}`",
-                        send_command_end - send_command_start,
-                        status_end - send_command_end
-                    );
-                    return Ok(ret);
-                }
-            }
-            Err(hci::adapter::Error::StreamError(StreamError::StreamFailed))
-        })
-    }
+
     fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
         &'s mut self,
     ) -> LocalBoxFuture<'s, Result<EventPacket<S>, Error>>;
@@ -106,15 +68,43 @@ impl Adapter for DummyAdapter {
     ) -> LocalBoxFuture<'s, Result<(), Error>> {
         unimplemented!("dummy adapter write event {:?}", packet)
     }
-    fn send_command<'a, 'c: 'a, Cmd: Command + 'c>(
-        &'a mut self,
-        _command: Cmd,
-    ) -> LocalBoxFuture<'a, Result<Cmd::Return, hci::adapter::Error>> {
-        unimplemented!("dummy send {:?}", Cmd::opcode())
-    }
     fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
         &'s mut self,
     ) -> LocalBoxFuture<'s, Result<EventPacket<S>, Error>> {
         unimplemented!("dummy adapter read event")
     }
+}
+/// Send a HCI Command
+/// With `Box`ing overhead, it takes around `150-200us` to send the command and `400-500us` to
+/// receive the status. Some commands (like resetting the HCI adapter) take longer (resetting
+/// took could up to `3ms` for example)
+pub async fn send_command<
+    A: Adapter,
+    Cmd: Command,
+    Buf: Storage<u8>,
+    F: FnMut(EventPacket<Buf>) -> Result<(), hci::adapter::Error>,
+>(
+    a: &mut A,
+    command: Cmd,
+    mut handle_not_return: Option<F>,
+) -> Result<Cmd::Return, hci::adapter::Error> {
+    // Pack Command
+    a.write_command(
+        command
+            .pack_command_packet::<Buf>()
+            .map_err(StreamError::CommandError)?
+            .as_ref(),
+    )
+    .await?;
+    for _try_i in 0..HCI_EVENT_READ_TRIES {
+        let event: EventPacket<Buf> = a.read_event::<Buf>().await?;
+        if let Some(ret) = Cmd::unpack_return(event.as_ref()).map_err(StreamError::EventError)? {
+            return Ok(ret);
+        } else {
+            if let Some(handler) = handle_not_return.as_mut() {
+                handler(event)?;
+            }
+        }
+    }
+    Err(hci::adapter::Error::StreamError(StreamError::StreamFailed))
 }

@@ -165,6 +165,7 @@ pub enum ErrorCode {
     HostBusyPairing = 0x38,
 }
 impl ErrorCode {
+    pub const BYTE_LEN: usize = 1;
     pub fn is_ok(self) -> bool {
         match self {
             ErrorCode::Ok => true,

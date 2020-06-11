@@ -3,6 +3,7 @@ pub mod advertisement;
 pub mod advertisement_structures;
 pub mod advertiser;
 pub mod att;
+pub mod connection;
 pub mod gatt;
 pub mod link;
 pub mod report;
