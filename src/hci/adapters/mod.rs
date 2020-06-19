@@ -1,4 +1,5 @@
 //! Contains logic for HCI Adapters (usually byte streams).
+pub mod buffer;
 pub mod le;
 
 use crate::bytes::Storage;

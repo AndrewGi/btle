@@ -3,12 +3,38 @@ use crate::error::IOError;
 use crate::hci;
 use crate::hci::command::CommandPacket;
 use crate::hci::event::{EventCode, EventPacket, StaticHCIBuffer};
-use crate::hci::packet::{PacketType, RawPacket};
 use crate::hci::usb::device::{Device, DeviceIdentifier};
 use crate::hci::usb::Error;
 use core::convert::TryFrom;
 use core::time::Duration;
 use futures_util::future::LocalBoxFuture;
+
+/// Yield the task back to the executor. Just returns `Poll::Pending` once and calls
+/// `.waker_by_ref()` to put the task back onto the queue. Workaround for blocking futures
+pub async fn yield_now() {
+    struct YieldNow {
+        yielded: bool,
+    }
+
+    impl core::future::Future for YieldNow {
+        type Output = ();
+
+        fn poll(
+            mut self: core::pin::Pin<&mut Self>,
+            cx: &mut core::task::Context<'_>,
+        ) -> core::task::Poll<()> {
+            if self.yielded {
+                return core::task::Poll::Ready(());
+            }
+
+            self.yielded = true;
+            cx.waker().wake_by_ref();
+            core::task::Poll::Pending
+        }
+    }
+
+    YieldNow { yielded: false }.await
+}
 
 pub const HCI_COMMAND_ENDPOINT: u8 = 0x01;
 pub const ACL_DATA_OUT_ENDPOINT: u8 = 0x02;
@@ -17,7 +43,11 @@ pub const ACL_DATA_IN_ENDPOINT: u8 = 0x82;
 
 pub const INTERFACE_NUM: u8 = 0x00;
 
-/// USB Bluetooth Adapter.
+/// USB Bluetooth HCI Adapter.
+/// # WARNING
+/// Currently using the `rusb` crate (a `libusb` wrapper) for USB communication but it !!DOES NOT!!
+/// implement async/await yet. All read/write function will be blocking!
+/// TODO: Add asynchronous USB support
 pub struct Adapter {
     handle: rusb::DeviceHandle<rusb::Context>,
     device_descriptor: rusb::DeviceDescriptor,
@@ -115,7 +145,7 @@ impl Adapter {
             .handle
             .read_bulk(ACL_DATA_IN_ENDPOINT, buf, Self::TIMEOUT)?)
     }
-    pub fn read_event_bytes(&mut self, buf: &mut [u8]) -> Result<(), Error> {
+    pub async fn read_event_bytes(&mut self, buf: &mut [u8]) -> Result<(), Error> {
         // TODO: Change from synchronous IO to Async IO.
         let mut index = 0;
         let size = buf.len();
@@ -127,33 +157,28 @@ impl Adapter {
                 Err(e) => return Err(e),
             };
             index += amount;
+            // Workaround for blocking the async executor
+            yield_now().await;
         }
         Ok(())
     }
-    pub fn read_event_packet<Buf: Storage<u8>>(
+    pub async fn read_event_packet<Buf: Storage<u8>>(
         &mut self,
     ) -> Result<EventPacket<Buf>, hci::adapter::Error> {
         let mut header = [0u8; 2];
-        self.read_event_bytes(&mut header[..])?;
-        let event_code =
-            EventCode::try_from(header[0]).map_err(|_| hci::StreamError::BadEventCode)?;
+        self.read_event_bytes(&mut header[..]).await?;
+        println!("read first {:02X}", header[0]);
         let len = header[1];
         let mut buf = Buf::with_size(len.into());
-        self.read_event_bytes(buf.as_mut())?;
+        // Even if the event code is wrong, still read so we don't leave data in buffer
+        self.read_event_bytes(buf.as_mut()).await?;
+        let event_code =
+            EventCode::try_from(header[0]).map_err(|_| hci::StreamError::BadEventCode)?;
+        println!("done read");
         Ok(EventPacket {
             event_code,
             parameters: buf,
         })
-    }
-    pub fn write_packet(&mut self, packet: RawPacket<&[u8]>) -> Result<(), Error> {
-        // TODO: change this API to safer error handling
-        match packet.packet_type {
-            PacketType::Command => self.write_hci_command_bytes(packet.buf),
-            PacketType::ACLData => unimplemented!(),
-            PacketType::SCOData => unimplemented!(),
-            PacketType::Event => panic!("can't write an event packet"),
-            PacketType::Vendor => unimplemented!(),
-        }
     }
     pub fn device(&self) -> Device {
         Device::new(self.handle.device())
@@ -185,6 +210,10 @@ impl hci::adapter::Adapter for Adapter {
     fn read_event<'s, 'p: 's, S: Storage<u8> + 'p>(
         &'s mut self,
     ) -> LocalBoxFuture<'s, Result<EventPacket<S>, hci::adapter::Error>> {
-        Box::pin(async move { self.read_event_packet().map_err(hci::adapter::Error::from) })
+        Box::pin(async move {
+            self.read_event_packet()
+                .await
+                .map_err(hci::adapter::Error::from)
+        })
     }
 }

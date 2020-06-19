@@ -41,6 +41,8 @@ const INTERVAL_MAX: u16 = 0x4000;
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ScanInterval(u16);
 impl ScanInterval {
+    pub const MIN: ScanInterval = ScanInterval(INTERVAL_MIN);
+    pub const MAX: ScanInterval = ScanInterval(INTERVAL_MAX);
     pub const BYTE_LEN: usize = 2;
     pub const DEFAULT: ScanInterval = ScanInterval(0x0010);
     pub fn new(interval: u16) -> ScanInterval {
@@ -67,6 +69,8 @@ impl Default for ScanInterval {
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ScanWindow(u16);
 impl ScanWindow {
+    pub const MIN: ScanWindow = ScanWindow(INTERVAL_MIN);
+    pub const MAX: ScanWindow = ScanWindow(INTERVAL_MAX);
     pub const BYTE_LEN: usize = 2;
     pub const DEFAULT: ScanWindow = ScanWindow(0x0010);
     pub fn new(window: u16) -> ScanWindow {

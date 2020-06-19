@@ -108,6 +108,16 @@ impl Command for SetAdvertisingParameters {
 
     fn pack_into(&self, buf: &mut [u8]) -> Result<(), PackError> {
         PackError::expect_length(AdvertisingParameters::BYTE_LEN, buf)?;
+        if self.0.advertising_type == AdvertisingType::AdvNonnConnInd {
+            if self.0.interval_min < AdvertisingInterval::MIN_NON_CONN
+                || self.0.interval_max < AdvertisingInterval::MIN_NON_CONN
+            {
+                return Err(PackError::InvalidFields);
+            }
+        }
+        if self.0.interval_max < self.0.interval_min {
+            return Err(PackError::InvalidFields);
+        }
         buf[0..2].copy_from_slice(&u16::from(self.0.interval_min).to_bytes_le()[..]);
         buf[2..4].copy_from_slice(&u16::from(self.0.interval_max).to_bytes_le()[..]);
         buf[4] = self.0.advertising_type.into();

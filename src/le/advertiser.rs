@@ -4,6 +4,8 @@ use crate::BTAddress;
 use crate::ConversionError;
 use core::convert::TryFrom;
 use futures_util::future::LocalBoxFuture;
+use std::convert::TryInto;
+use std::time::Duration;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct AdvertisingInterval(u16);
@@ -11,6 +13,8 @@ impl AdvertisingInterval {
     pub const BYTE_LEN: usize = 2;
     pub const MIN_U16: u16 = 0x0020u16;
     pub const MIN: AdvertisingInterval = AdvertisingInterval(Self::MIN_U16);
+    pub const MIN_NON_CONN_U16: u16 = 0x00A0;
+    pub const MIN_NON_CONN: AdvertisingInterval = AdvertisingInterval(Self::MIN_NON_CONN_U16);
     pub const MAX_U16: u16 = 0x4000u16;
     pub const MAX: AdvertisingInterval = AdvertisingInterval(Self::MAX_U16);
     pub const DEFAULT_U16: u16 = 0x0800u16;
@@ -27,13 +31,32 @@ impl AdvertisingInterval {
         );
         AdvertisingInterval(interval)
     }
+    pub const fn as_duration(self) -> core::time::Duration {
+        core::time::Duration::from_micros(self.as_microseconds() as u64)
+    }
     pub const fn as_microseconds(self) -> u32 {
         self.0 as u32 * 625
+    }
+    pub fn from_milliseconds(milli: u16) -> Option<AdvertisingInterval> {
+        (milli * 16 / 10).try_into().ok()
     }
 }
 impl Default for AdvertisingInterval {
     fn default() -> Self {
         Self::DEFAULT
+    }
+}
+impl TryFrom<core::time::Duration> for AdvertisingInterval {
+    type Error = ConversionError;
+
+    fn try_from(value: Duration) -> Result<Self, Self::Error> {
+        Self::from_milliseconds(
+            value
+                .as_millis()
+                .try_into()
+                .map_err(|_| ConversionError(()))?,
+        )
+        .ok_or(ConversionError(()))
     }
 }
 impl TryFrom<u16> for AdvertisingInterval {
@@ -57,7 +80,10 @@ pub enum AdvertisingType {
     AdvInd = 0x00,
     AdvDirectIndHighDutyCycle = 0x01,
     AdvScanInd = 0x02,
-    AdvNonnconnInd = 0x03,
+    /// WARNING: AdvNonnConnInd only allows a advertise interval of 100ms. BT 5.0 lifts this
+    /// restriction but BT 4.0 adapters (most adapters) will report an error if you try to set it
+    /// less
+    AdvNonnConnInd = 0x03,
     AdvDirectIndLowDutyCycle = 0x04,
 }
 impl AdvertisingType {
@@ -82,7 +108,7 @@ impl TryFrom<u8> for AdvertisingType {
             0x00 => Ok(AdvertisingType::AdvInd),
             0x01 => Ok(AdvertisingType::AdvDirectIndHighDutyCycle),
             0x02 => Ok(AdvertisingType::AdvScanInd),
-            0x03 => Ok(AdvertisingType::AdvNonnconnInd),
+            0x03 => Ok(AdvertisingType::AdvNonnConnInd),
             0x04 => Ok(AdvertisingType::AdvDirectIndLowDutyCycle),
             _ => Err(ConversionError(())),
         }
@@ -277,12 +303,30 @@ impl AdvertisingParameters {
     /// `address` parameters.
     pub const fn with_address(self, address: BTAddress) -> AdvertisingParameters {
         AdvertisingParameters {
-            interval_min: self.interval_max,
+            interval_min: self.interval_min,
             interval_max: self.interval_max,
             advertising_type: self.advertising_type,
             own_address_type: self.own_address_type,
             peer_address_type: self.peer_address_type,
             peer_address: address,
+            channel_map: self.channel_map,
+            filter_policy: self.filter_policy,
+        }
+    }
+    /// Creates a new `AdvertisingParameters` from `self` with `self.interval_min` and
+    /// `self.interval_max` set to the `interval_min` and `interval_max` parameter respectively.
+    pub const fn with_interval(
+        self,
+        interval_min: AdvertisingInterval,
+        interval_max: AdvertisingInterval,
+    ) -> AdvertisingParameters {
+        AdvertisingParameters {
+            interval_min,
+            interval_max,
+            advertising_type: self.advertising_type,
+            own_address_type: self.own_address_type,
+            peer_address_type: self.peer_address_type,
+            peer_address: self.peer_address,
             channel_map: self.channel_map,
             filter_policy: self.filter_policy,
         }
