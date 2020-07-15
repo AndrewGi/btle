@@ -148,7 +148,7 @@ pub trait HCIReader: Unpin {
 pub struct Stream<S: HCIReader, B: Deref<Target = S>> {
     pub stream: Pin<B>,
 }
-pub const HCI_EVENT_READ_TRIES: usize = 20;
+pub const HCI_EVENT_READ_TRIES: usize = 50;
 impl<S: HCIReader, B: Deref<Target = S> + DerefMut> Stream<S, B> {
     pub fn new(stream: Pin<B>) -> Self {
         Self { stream }

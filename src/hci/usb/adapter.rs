@@ -160,6 +160,7 @@ impl Adapter {
             // Workaround for blocking the async executor
             yield_now().await;
         }
+        println!("event bytes: {:?}", &buf);
         Ok(())
     }
     pub async fn read_event_packet<Buf: Storage<u8>>(

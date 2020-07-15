@@ -208,6 +208,7 @@ pub trait MetaEvent {
     where
         Self: Sized,
     {
+        dbg!(&packet);
         if Self::META_CODE != packet.code {
             Err(PackError::BadOpcode)
         } else {
@@ -216,10 +217,18 @@ pub trait MetaEvent {
     }
     fn meta_pack_into(&self, buf: &mut [u8]) -> Result<(), PackError>;
 }
-
+#[derive(Copy, Clone)]
 pub struct RawMetaEvent<Buf> {
     pub code: MetaEventCode,
     pub parameters: Buf,
+}
+impl<Buf: AsRef<[u8]>> core::fmt::Debug for RawMetaEvent<Buf> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RawMetaEvent<Buf>")
+            .field("code", &self.code)
+            .field("parameters", &self.parameters.as_ref())
+            .finish()
+    }
 }
 impl<Buf: AsRef<[u8]>> RawMetaEvent<Buf> {
     pub fn as_ref(&self) -> RawMetaEvent<&'_ [u8]> {
@@ -239,6 +248,7 @@ impl<'a> TryFrom<EventPacket<&'a [u8]>> for RawMetaEvent<&'a [u8]> {
     type Error = PackError;
 
     fn try_from(value: EventPacket<&'a [u8]>) -> Result<Self, Self::Error> {
+        dbg!(&value);
         if value.event_code != EventCode::LEMeta {
             return Err(PackError::BadOpcode);
         }

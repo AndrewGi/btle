@@ -16,6 +16,12 @@ impl<Buf> HCIEventBuffer<Buf> {
     pub fn into_inner(self) -> VecDeque<EventPacket<Buf>> {
         self.deque
     }
+    pub fn inner_mut(&mut self) -> &mut VecDeque<EventPacket<Buf>> {
+        &mut self.deque
+    }
+    pub fn inner(&self) -> &VecDeque<EventPacket<Buf>> {
+        &self.deque
+    }
     pub fn push(&mut self, event: EventPacket<Buf>) {
         self.deque.push_back(event)
     }
