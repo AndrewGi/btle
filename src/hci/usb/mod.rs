@@ -1,6 +1,5 @@
 pub mod adapter;
 pub mod device;
-pub mod manager;
 pub mod supported;
 
 use crate::error::IOError;
@@ -12,23 +11,23 @@ impl core::fmt::Display for Error {
         write!(f, "USB Error '{:?}'", self.0)
     }
 }
-impl From<rusb::Error> for Error {
-    fn from(e: rusb::Error) -> Self {
+impl From<usbw::libusb::error::Error> for Error {
+    fn from(e: usbw::libusb::error::Error) -> Self {
         Error(match e {
-            rusb::Error::Success => unreachable!("success passed as error type"),
-            rusb::Error::Io => IOError::Other,
-            rusb::Error::InvalidParam => IOError::InvalidArgument,
-            rusb::Error::Access => IOError::AccessDenied,
-            rusb::Error::NoDevice => IOError::NotConnected,
-            rusb::Error::NotFound => IOError::NotFound,
-            rusb::Error::Busy => IOError::Refused,
-            rusb::Error::Timeout => IOError::TimedOut,
-            rusb::Error::Overflow => IOError::Overflow,
-            rusb::Error::Pipe => IOError::Pipe,
-            rusb::Error::Interrupted => IOError::Interrupted,
-            rusb::Error::NoMem => IOError::OutOfMemory,
-            rusb::Error::NotSupported => IOError::NotImplemented,
-            rusb::Error::Other => IOError::Other,
+            usbw::libusb::error::Error::Io => IOError::Other,
+            usbw::libusb::error::Error::InvalidParam => IOError::InvalidArgument,
+            usbw::libusb::error::Error::Access => IOError::AccessDenied,
+            usbw::libusb::error::Error::NoDevice => IOError::NotConnected,
+            usbw::libusb::error::Error::NotFound => IOError::NotFound,
+            usbw::libusb::error::Error::Busy => IOError::Refused,
+            usbw::libusb::error::Error::Timeout => IOError::TimedOut,
+            usbw::libusb::error::Error::Overflow => IOError::Overflow,
+            usbw::libusb::error::Error::Pipe => IOError::Pipe,
+            usbw::libusb::error::Error::Interrupted => IOError::Interrupted,
+            usbw::libusb::error::Error::NoMem => IOError::OutOfMemory,
+            usbw::libusb::error::Error::NotSupported => IOError::NotImplemented,
+            usbw::libusb::error::Error::Other => IOError::Other,
+            usbw::libusb::error::Error::BadDescriptor => IOError::InvalidArgument,
         })
     }
 }

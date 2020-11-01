@@ -3,11 +3,15 @@ use crate::error::IOError;
 use crate::hci;
 use crate::hci::command::CommandPacket;
 use crate::hci::event::{EventCode, EventPacket, StaticHCIBuffer};
-use crate::hci::usb::device::{Device, DeviceIdentifier};
+use crate::hci::usb::device::has_bluetooth_interface;
 use crate::hci::usb::Error;
 use core::convert::TryFrom;
 use core::time::Duration;
 use futures_util::future::LocalBoxFuture;
+use usbw::device::DeviceIdentifier;
+use usbw::libusb::device::Device;
+use usbw::libusb::device_descriptor::DeviceDescriptor;
+use usbw::libusb::device_handle::DeviceHandle;
 
 /// Yield the task back to the executor. Just returns `Poll::Pending` once and calls
 /// `.waker_by_ref()` to put the task back onto the queue. Workaround for blocking futures
@@ -40,7 +44,7 @@ pub const HCI_COMMAND_ENDPOINT: u8 = 0x01;
 pub const ACL_DATA_OUT_ENDPOINT: u8 = 0x02;
 pub const HCI_EVENT_ENDPOINT: u8 = 0x81;
 pub const ACL_DATA_IN_ENDPOINT: u8 = 0x82;
-
+pub const HCI_COMMAND_REQUEST_TYPE: u8 = 0x20;
 pub const INTERFACE_NUM: u8 = 0x00;
 
 /// USB Bluetooth HCI Adapter.
@@ -49,8 +53,8 @@ pub const INTERFACE_NUM: u8 = 0x00;
 /// implement async/await yet. All read/write function will be blocking!
 /// TODO: Add asynchronous USB support
 pub struct Adapter {
-    handle: rusb::DeviceHandle<rusb::Context>,
-    device_descriptor: rusb::DeviceDescriptor,
+    handle: DeviceHandle,
+    device_descriptor: DeviceDescriptor,
     _private: (),
 }
 impl core::fmt::Debug for Adapter {
@@ -62,30 +66,30 @@ impl Adapter {
     /// Timeout for USB transfers (1s). If expired, it'll return `IOError::TimedOut`. Hoping to just
     /// be a temporary solution until I get Async USB working.
     pub const TIMEOUT: Duration = Duration::from_secs(1);
-    pub fn from_handle(mut handle: rusb::DeviceHandle<rusb::Context>) -> Result<Adapter, Error> {
+    pub fn open(device: Device) -> Result<Adapter, Error> {
+        if has_bluetooth_interface(&device)? {
+            device
+                .open()
+                .map_err(Error::from)
+                .and_then(Adapter::from_handle)
+        } else {
+            Err(Error(IOError::NotImplemented))
+        }
+    }
+    pub fn from_handle(mut handle: DeviceHandle) -> Result<Adapter, Error> {
+        handle.reset()?;
         handle.claim_interface(INTERFACE_NUM)?;
         Ok(Adapter::from_parts(
             handle.device().device_descriptor()?,
             handle,
         ))
     }
-    pub(crate) fn from_parts(
-        device_descriptor: rusb::DeviceDescriptor,
-        handle: rusb::DeviceHandle<rusb::Context>,
-    ) -> Adapter {
+    pub(crate) fn from_parts(device_descriptor: DeviceDescriptor, handle: DeviceHandle) -> Adapter {
         Adapter {
             handle,
             _private: (),
             device_descriptor,
         }
-    }
-    /// Internal USB Device handle from `rusb`. Maybe change in the future if we use a different
-    /// crate than `rusb`.
-    pub fn rusb_handle_mut(&mut self) -> &mut rusb::DeviceHandle<rusb::Context> {
-        &mut self.handle
-    }
-    pub fn rusb_handle(&self) -> &rusb::DeviceHandle<rusb::Context> {
-        &self.handle
     }
     pub fn device_identifier(&self) -> DeviceIdentifier {
         DeviceIdentifier {
@@ -118,6 +122,7 @@ impl Adapter {
         }
     }
     pub fn write_hci_command_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        dbg!(&bytes);
         //TODO: Change from synchronous IO to Async IO.
         let mut index = 0;
         let size = bytes.len();
@@ -127,7 +132,7 @@ impl Adapter {
             // Bluetooth Core Spec v5.2 Vol 4 Part B 2.2
             let amount =
                 self.handle
-                    .write_control(0x20, 0, 0, 0, &bytes[index..], Self::TIMEOUT)?;
+                    .control_write(0x20, 0, 0, 0, &bytes[index..], Self::TIMEOUT)?;
             if amount == 0 {
                 return Err(Error(IOError::TimedOut));
             }
@@ -138,12 +143,12 @@ impl Adapter {
     pub fn read_some_event_bytes(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         Ok(self
             .handle
-            .read_interrupt(HCI_EVENT_ENDPOINT, buf, Self::TIMEOUT)?)
+            .interrupt_read(HCI_EVENT_ENDPOINT, buf, Self::TIMEOUT)?)
     }
     pub fn read_some_acl_bytes(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         Ok(self
             .handle
-            .read_bulk(ACL_DATA_IN_ENDPOINT, buf, Self::TIMEOUT)?)
+            .bulk_read(ACL_DATA_IN_ENDPOINT, buf, Self::TIMEOUT)?)
     }
     pub async fn read_event_bytes(&mut self, buf: &mut [u8]) -> Result<(), Error> {
         // TODO: Change from synchronous IO to Async IO.
@@ -180,9 +185,6 @@ impl Adapter {
             event_code,
             parameters: buf,
         })
-    }
-    pub fn device(&self) -> Device {
-        Device::new(self.handle.device())
     }
     pub fn reset(&mut self) -> Result<(), Error> {
         self.handle.reset()?;

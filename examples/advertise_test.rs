@@ -60,15 +60,17 @@ pub fn dump_bluez(adapter_id: u16) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "hci_usb")]
 pub async fn dump_usb() -> Result<(), btle::hci::adapter::Error> {
     use btle::hci::usb;
-    let context = usb::manager::Manager::new()?;
     println!("opening first device...");
-    let device: usb::device::Device = context
-        .devices()?
-        .bluetooth_adapters()
-        .next()
-        .ok_or(IOError::NotFound)??;
+    let device: usbw::libusb::device::Device = usb::device::bluetooth_adapters(
+        usbw::libusb::context::Context::default()
+            .map_err(btle::hci::usb::Error::from)?
+            .device_list()
+            .iter(),
+    )
+    .next()
+    .ok_or(IOError::NotFound)??;
     println!("using {:?}", device);
-    let mut adapter = device.open()?;
+    let mut adapter = usb::adapter::Adapter::open(device)?;
     adapter.reset()?;
     dump_adapter(adapter).await
 }

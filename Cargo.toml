@@ -15,7 +15,7 @@ bluez_socket = ["nix", "libc", "std", "hci", "tokio/uds"]
 winrt_drivers = ["winrt", "std"]
 hci = []
 classic = []
-hci_usb = ["hci", "rusb"]
+hci_usb = ["hci", "usbw"]
 remote = ["std", "hci"]
 std = []
 serde-1 = ["serde"]
@@ -23,11 +23,13 @@ serde-1 = ["serde"]
 [dependencies]
 winrt = {version = "0.6.0", default_features = false, features = ["windows-devices", "windows-storage"], optional = true}
 nix = {version = "0.16.1", optional = true}
-libc = {version = "0.2.66", optional = true}
-tokio = {version = "0.2.13", optional = true, default_features = false}
-rusb = {version = "0.5.5", optional = true}
+libc = {version = "0.2", optional = true}
+tokio = {version = "0.2", optional = true, default_features = false}
+#rusb = {version = "0.5.5", optional = true}
+usbw = {version = "0.0.2", optional = true, path = "../../usbw"}
 futures-util = {version = "0.3.4", default_features = false, features=["alloc"]}
 serde = {version = "1.0", default-features = false, features = ["derive"], optional = true }
+
 [[example]]
 name = "advertisement_dump"
 
@@ -40,4 +42,4 @@ name = "usb_test"
 required-features = ["hci_usb"]
 
 [dev-dependencies]
-tokio = "0.2.18"
+tokio = "0.2"
