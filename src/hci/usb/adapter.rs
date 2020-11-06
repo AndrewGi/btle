@@ -9,6 +9,7 @@ use core::convert::TryFrom;
 use core::time::Duration;
 use futures_util::future::LocalBoxFuture;
 use usbw::device::DeviceIdentifier;
+use usbw::libusb::async_device::AsyncDevice;
 use usbw::libusb::device::Device;
 use usbw::libusb::device_descriptor::DeviceDescriptor;
 use usbw::libusb::device_handle::DeviceHandle;
@@ -53,7 +54,7 @@ pub const INTERFACE_NUM: u8 = 0x00;
 /// implement async/await yet. All read/write function will be blocking!
 /// TODO: Add asynchronous USB support
 pub struct Adapter {
-    handle: DeviceHandle,
+    handle: AsyncDevice,
     device_descriptor: DeviceDescriptor,
     _private: (),
 }
@@ -66,25 +67,22 @@ impl Adapter {
     /// Timeout for USB transfers (1s). If expired, it'll return `IOError::TimedOut`. Hoping to just
     /// be a temporary solution until I get Async USB working.
     pub const TIMEOUT: Duration = Duration::from_secs(1);
-    pub fn open(device: Device) -> Result<Adapter, Error> {
-        if has_bluetooth_interface(&device)? {
-            device
-                .open()
-                .map_err(Error::from)
-                .and_then(Adapter::from_handle)
+    pub fn open(device_handle: AsyncDevice) -> Result<Adapter, Error> {
+        if has_bluetooth_interface(&device_handle.handle_ref().device())? {
+            Self::from_handle(device_handle)
         } else {
             Err(Error(IOError::NotImplemented))
         }
     }
-    pub fn from_handle(mut handle: DeviceHandle) -> Result<Adapter, Error> {
-        handle.reset()?;
-        handle.claim_interface(INTERFACE_NUM)?;
+    pub fn from_handle(mut handle: AsyncDevice) -> Result<Adapter, Error> {
+        handle.handle_mut().reset()?;
+        handle.handle_mut().claim_interface(INTERFACE_NUM)?;
         Ok(Adapter::from_parts(
             handle.device().device_descriptor()?,
             handle,
         ))
     }
-    pub(crate) fn from_parts(device_descriptor: DeviceDescriptor, handle: DeviceHandle) -> Adapter {
+    pub(crate) fn from_parts(device_descriptor: DeviceDescriptor, handle: AsyncDevice) -> Adapter {
         Adapter {
             handle,
             _private: (),
@@ -101,7 +99,11 @@ impl Adapter {
         // Note, uses device's primary language and replaces any UTF-8 with '?'.
         // (According to libusb)
         match self.device_descriptor.manufacturer_string_index() {
-            Some(index) => Ok(Some(self.handle.read_string_descriptor_ascii(index)?)),
+            Some(index) => Ok(Some(
+                self.handle
+                    .handle_ref()
+                    .read_string_descriptor_ascii(index)?,
+            )),
             None => Ok(None),
         }
     }
@@ -109,7 +111,11 @@ impl Adapter {
         // Note, uses device's primary language and replaces any UTF-8 with '?'.
         // (According to libusb)
         match self.device_descriptor.product_string_index() {
-            Some(index) => Ok(Some(self.handle.read_string_descriptor_ascii(index)?)),
+            Some(index) => Ok(Some(
+                self.handle
+                    .handle_ref()
+                    .read_string_descriptor_ascii(index)?,
+            )),
             None => Ok(None),
         }
     }
@@ -117,11 +123,15 @@ impl Adapter {
         // Note, uses device's primary language and replaces any UTF-8 with '?'.
         // (According to libusb)
         match self.device_descriptor.manufacturer_string_index() {
-            Some(index) => Ok(Some(self.handle.read_string_descriptor_ascii(index)?)),
+            Some(index) => Ok(Some(
+                self.handle
+                    .handle_ref()
+                    .read_string_descriptor_ascii(index)?,
+            )),
             None => Ok(None),
         }
     }
-    pub fn write_hci_command_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
+    pub async fn write_hci_command_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
         dbg!(&bytes);
         //TODO: Change from synchronous IO to Async IO.
         let mut index = 0;
@@ -130,9 +140,10 @@ impl Adapter {
         while index < size {
             // bmRequestType = 0x20, bRequest = 0x00, wValue = 0x00, wIndex = 0x00 according to
             // Bluetooth Core Spec v5.2 Vol 4 Part B 2.2
-            let amount =
-                self.handle
-                    .control_write(0x20, 0, 0, 0, &bytes[index..], Self::TIMEOUT)?;
+            let amount = self
+                .handle
+                .control_write(0x20, 0, 0, 0, &bytes[index..], Self::TIMEOUT)
+                .await?;
             if amount == 0 {
                 return Err(Error(IOError::TimedOut));
             }
@@ -140,30 +151,29 @@ impl Adapter {
         }
         Ok(())
     }
-    pub fn read_some_event_bytes(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+    pub async fn read_some_event_bytes(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         Ok(self
             .handle
-            .interrupt_read(HCI_EVENT_ENDPOINT, buf, Self::TIMEOUT)?)
+            .interrupt_read(HCI_EVENT_ENDPOINT, buf, Self::TIMEOUT)
+            .await?)
     }
-    pub fn read_some_acl_bytes(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+    pub async fn read_some_acl_bytes(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         Ok(self
             .handle
-            .bulk_read(ACL_DATA_IN_ENDPOINT, buf, Self::TIMEOUT)?)
+            .bulk_read(ACL_DATA_IN_ENDPOINT, buf, Self::TIMEOUT)
+            .await?)
     }
     pub async fn read_event_bytes(&mut self, buf: &mut [u8]) -> Result<(), Error> {
-        // TODO: Change from synchronous IO to Async IO.
         let mut index = 0;
         let size = buf.len();
         // TODO: Fix probably infinite loop
         while index < size {
-            let amount = match self.read_some_event_bytes(&mut buf[index..]) {
+            let amount = match self.read_some_event_bytes(&mut buf[index..]).await {
                 Ok(a) => a,
                 Err(Error(IOError::TimedOut)) => 0,
                 Err(e) => return Err(e),
             };
             index += amount;
-            // Workaround for blocking the async executor
-            yield_now().await;
         }
         println!("event bytes: {:?}", &buf);
         Ok(())
@@ -187,14 +197,14 @@ impl Adapter {
         })
     }
     pub fn reset(&mut self) -> Result<(), Error> {
-        self.handle.reset()?;
+        self.handle.handle_ref().reset()?;
         Ok(())
     }
 }
 impl Drop for Adapter {
     fn drop(&mut self) {
         // We claim the interface when we make the adapter so we must release when we drop.
-        let _ = self.handle.release_interface(INTERFACE_NUM);
+        let _ = self.handle.handle_mut().release_interface(INTERFACE_NUM);
     }
 }
 
@@ -206,6 +216,7 @@ impl hci::adapter::Adapter for Adapter {
         let packed = packet.to_raw_packet::<StaticHCIBuffer>();
         Box::pin(async move {
             self.write_hci_command_bytes(packed.buf.as_ref())
+                .await
                 .map_err(hci::adapter::Error::from)
         })
     }

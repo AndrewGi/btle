@@ -6,6 +6,7 @@ use crate::le::report::{AddressType, EventType, NumReports, ReportInfo};
 use crate::{BTAddress, PackError, BT_ADDRESS_LEN, RSSI};
 use core::convert::TryFrom;
 
+#[derive(Copy, Clone, Debug)]
 pub struct AdvertisingReport<T: AsRef<[ReportInfo<B>]>, B: AsRef<[u8]> = StaticAdvBuffer> {
     pub reports: T,
     _marker: core::marker::PhantomData<B>,
