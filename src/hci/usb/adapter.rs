@@ -10,9 +10,7 @@ use core::time::Duration;
 use futures_util::future::LocalBoxFuture;
 use usbw::device::DeviceIdentifier;
 use usbw::libusb::async_device::AsyncDevice;
-use usbw::libusb::device::Device;
 use usbw::libusb::device_descriptor::DeviceDescriptor;
-use usbw::libusb::device_handle::DeviceHandle;
 
 /// Yield the task back to the executor. Just returns `Poll::Pending` once and calls
 /// `.waker_by_ref()` to put the task back onto the queue. Workaround for blocking futures

@@ -1,5 +1,3 @@
-use crate::error::IOError;
-use crate::hci::usb::adapter::Adapter;
 use crate::hci::usb::Error;
 use usbw::libusb::device::Device;
 
