@@ -5,6 +5,7 @@ use futures_util::stream::StreamExt;
 #[allow(unused_imports)]
 use std::convert::{TryFrom, TryInto};
 use std::pin::Pin;
+use usbw::libusb;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = tokio::runtime::Builder::new()
@@ -60,16 +61,17 @@ pub fn dump_bluez(adapter_id: u16) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "hci_usb")]
 pub async fn dump_usb() -> Result<(), btle::hci::adapter::Error> {
     use btle::hci::usb;
-    let context = usb::manager::Manager::new()?;
+    let context = libusb::context::default_context().map_err(usb::Error::from)?;
     println!("opening first device...");
-    let device: usb::device::Device = context
-        .devices()?
-        .bluetooth_adapters()
+    // Skip the first adapter cause usually the built in bluetooth adapter
+    let device = usb::device::bluetooth_adapters(context.device_list().iter())
+        .skip(1)
         .next()
         .ok_or(IOError::NotFound)??;
     println!("using {:?}", device);
-    let mut adapter = device.open()?;
-    adapter.reset()?;
+    let context = context.start_async();
+    let adapter = context.make_async_device(device.open().map_err(usb::Error::from)?);
+    let adapter = usb::adapter::Adapter::open(adapter)?;
     dump_adapter(adapter).await
 }
 pub async fn dump_adapter<A: btle::hci::adapter::Adapter>(
