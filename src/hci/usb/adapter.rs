@@ -130,8 +130,6 @@ impl Adapter {
         }
     }
     pub async fn write_hci_command_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        dbg!(&bytes);
-        //TODO: Change from synchronous IO to Async IO.
         let mut index = 0;
         let size = bytes.len();
         // TODO: Fix probably infinite loop
@@ -173,7 +171,6 @@ impl Adapter {
             };
             index += amount;
         }
-        println!("event bytes: {:?}", &buf);
         Ok(())
     }
     pub async fn read_event_packet<Buf: Storage<u8>>(
@@ -181,14 +178,12 @@ impl Adapter {
     ) -> Result<EventPacket<Buf>, hci::adapter::Error> {
         let mut header = [0u8; 2];
         self.read_event_bytes(&mut header[..]).await?;
-        println!("read first {:02X}", header[0]);
         let len = header[1];
         let mut buf = Buf::with_size(len.into());
         // Even if the event code is wrong, still read so we don't leave data in buffer
         self.read_event_bytes(buf.as_mut()).await?;
         let event_code =
             EventCode::try_from(header[0]).map_err(|_| hci::StreamError::BadEventCode)?;
-        println!("done read");
         Ok(EventPacket {
             event_code,
             parameters: buf,

@@ -208,7 +208,6 @@ pub trait MetaEvent {
     where
         Self: Sized,
     {
-        dbg!(&packet);
         if Self::META_CODE != packet.code {
             Err(PackError::BadOpcode)
         } else {
@@ -248,7 +247,6 @@ impl<'a> TryFrom<EventPacket<&'a [u8]>> for RawMetaEvent<&'a [u8]> {
     type Error = PackError;
 
     fn try_from(value: EventPacket<&'a [u8]>) -> Result<Self, Self::Error> {
-        dbg!(&value);
         if value.event_code != EventCode::LEMeta {
             return Err(PackError::BadOpcode);
         }
