@@ -1,11 +1,10 @@
 use crate::bytes::Storage;
 use crate::error::IOError;
-use crate::hci;
 use crate::hci::command::{Command, CommandPacket};
 use crate::hci::event::EventPacket;
 use crate::hci::stream::HCI_EVENT_READ_TRIES;
 use crate::hci::StreamError;
-use futures_util::future::LocalBoxFuture;
+use crate::{hci, LocalBoxFuture};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum Error {

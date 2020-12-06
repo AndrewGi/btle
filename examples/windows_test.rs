@@ -1,6 +1,5 @@
-use btle::asyncs::stream::StreamExt;
-use btle::error::StdError;
 use btle::windows;
+use futures_util::StreamExt;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = tokio::runtime::Builder::new()
@@ -11,8 +10,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     println!("starting");
-    let mut watcher = windows::ble::observer::Watcher::new().map_err(StdError)?;
-    watcher.set_scan_enable(true).map_err(StdError)?;
+    let mut watcher = windows::ble::observer::Watcher::new()?;
+    watcher.set_scan_enable(true)?;
     let mut stream = watcher.advertisement_stream();
     println!("waiting for next advertisement");
     loop {

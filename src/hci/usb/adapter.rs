@@ -9,7 +9,7 @@ use core::convert::TryFrom;
 use core::time::Duration;
 use futures_util::future::LocalBoxFuture;
 use usbw::device::DeviceIdentifier;
-use usbw::libusb::async_device::AsyncDevice;
+use usbw::libusb::async_device::{AsyncDevice, SingleTransferDevice};
 use usbw::libusb::device_descriptor::DeviceDescriptor;
 
 /// Yield the task back to the executor. Just returns `Poll::Pending` once and calls
@@ -47,12 +47,8 @@ pub const HCI_COMMAND_REQUEST_TYPE: u8 = 0x20;
 pub const INTERFACE_NUM: u8 = 0x00;
 
 /// USB Bluetooth HCI Adapter.
-/// # WARNING
-/// Currently using the `rusb` crate (a `libusb` wrapper) for USB communication but it !!DOES NOT!!
-/// implement async/await yet. All read/write function will be blocking!
-/// TODO: Add asynchronous USB support
 pub struct Adapter {
-    handle: AsyncDevice,
+    handle: SingleTransferDevice,
     device_descriptor: DeviceDescriptor,
     _private: (),
 }
@@ -64,7 +60,7 @@ impl core::fmt::Debug for Adapter {
 impl Adapter {
     /// Timeout for USB transfers (1s). If expired, it'll return `IOError::TimedOut`. Hoping to just
     /// be a temporary solution until I get Async USB working.
-    pub const TIMEOUT: Duration = Duration::from_secs(1);
+    pub const TIMEOUT: Duration = Duration::from_secs(5);
     pub fn open(device_handle: AsyncDevice) -> Result<Adapter, Error> {
         if has_bluetooth_interface(&device_handle.handle_ref().device())? {
             Self::from_handle(device_handle)
@@ -82,7 +78,7 @@ impl Adapter {
     }
     pub(crate) fn from_parts(device_descriptor: DeviceDescriptor, handle: AsyncDevice) -> Adapter {
         Adapter {
-            handle,
+            handle: SingleTransferDevice::new(handle),
             _private: (),
             device_descriptor,
         }
@@ -93,38 +89,41 @@ impl Adapter {
             product_id: self.device_descriptor.product_id(),
         }
     }
-    pub fn get_manufacturer_string(&self) -> Result<Option<String>, Error> {
+    pub async fn get_manufacturer_string(&self) -> Result<Option<String>, Error> {
         // Note, uses device's primary language and replaces any UTF-8 with '?'.
         // (According to libusb)
         match self.device_descriptor.manufacturer_string_index() {
             Some(index) => Ok(Some(
                 self.handle
-                    .handle_ref()
-                    .read_string_descriptor_ascii(index)?,
+                    .device()
+                    .get_string_descriptor_ascii(index)
+                    .await?,
             )),
             None => Ok(None),
         }
     }
-    pub fn get_product_string(&self) -> Result<Option<String>, Error> {
+    pub async fn get_product_string(&self) -> Result<Option<String>, Error> {
         // Note, uses device's primary language and replaces any UTF-8 with '?'.
         // (According to libusb)
         match self.device_descriptor.product_string_index() {
             Some(index) => Ok(Some(
                 self.handle
-                    .handle_ref()
-                    .read_string_descriptor_ascii(index)?,
+                    .device()
+                    .get_string_descriptor_ascii(index)
+                    .await?,
             )),
             None => Ok(None),
         }
     }
-    pub fn get_serial_number_string(&self) -> Result<Option<String>, Error> {
+    pub async fn get_serial_number_string(&self) -> Result<Option<String>, Error> {
         // Note, uses device's primary language and replaces any UTF-8 with '?'.
         // (According to libusb)
         match self.device_descriptor.manufacturer_string_index() {
             Some(index) => Ok(Some(
                 self.handle
-                    .handle_ref()
-                    .read_string_descriptor_ascii(index)?,
+                    .device()
+                    .get_string_descriptor_ascii(index)
+                    .await?,
             )),
             None => Ok(None),
         }
@@ -147,16 +146,24 @@ impl Adapter {
         }
         Ok(())
     }
-    pub async fn read_some_event_bytes(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+    pub async fn read_some_event_bytes(
+        &mut self,
+        buf: &mut [u8],
+        timeout: Duration,
+    ) -> Result<usize, Error> {
         Ok(self
             .handle
-            .interrupt_read(HCI_EVENT_ENDPOINT, buf, Self::TIMEOUT)
+            .interrupt_read(HCI_EVENT_ENDPOINT, buf, timeout)
             .await?)
     }
-    pub async fn read_some_acl_bytes(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+    pub async fn read_some_acl_bytes(
+        &mut self,
+        buf: &mut [u8],
+        timeout: Duration,
+    ) -> Result<usize, Error> {
         Ok(self
             .handle
-            .bulk_read(ACL_DATA_IN_ENDPOINT, buf, Self::TIMEOUT)
+            .bulk_read(ACL_DATA_IN_ENDPOINT, buf, timeout)
             .await?)
     }
     pub async fn read_event_bytes(&mut self, buf: &mut [u8]) -> Result<(), Error> {
@@ -164,13 +171,33 @@ impl Adapter {
         let size = buf.len();
         // TODO: Fix probably infinite loop
         while index < size {
-            let amount = match self.read_some_event_bytes(&mut buf[index..]).await {
+            let amount = match self
+                .read_some_event_bytes(&mut buf[index..], Self::TIMEOUT)
+                .await
+            {
                 Ok(a) => a,
                 Err(Error(IOError::TimedOut)) => 0,
                 Err(e) => return Err(e),
             };
             index += amount;
         }
+        Ok(())
+    }
+    pub async fn flush_event_buffer(&mut self) -> Result<(), Error> {
+        // This timeout can be adjusted to make the flush more reliable. Longer duration might mean
+        // more reliable but also a longer time to flush.
+        const FLUSH_TIMEOUT: Duration = Duration::from_millis(5);
+
+        let mut buf = vec![0_u8; 256];
+        while match self
+            .read_some_event_bytes(buf.as_mut_slice(), FLUSH_TIMEOUT)
+            .await
+        {
+            Ok(a) => a,
+            Err(Error(IOError::TimedOut)) => 0,
+            Err(e) => return Err(e),
+        } != 0
+        {}
         Ok(())
     }
     pub async fn read_event_packet<Buf: Storage<u8>>(
@@ -190,14 +217,18 @@ impl Adapter {
         })
     }
     pub fn reset(&mut self) -> Result<(), Error> {
-        self.handle.handle_ref().reset()?;
+        self.handle.device().handle_ref().reset()?;
         Ok(())
     }
 }
 impl Drop for Adapter {
     fn drop(&mut self) {
         // We claim the interface when we make the adapter so we must release when we drop.
-        let _ = self.handle.handle_mut().release_interface(INTERFACE_NUM);
+        let _ = self
+            .handle
+            .device_mut()
+            .handle_mut()
+            .release_interface(INTERFACE_NUM);
     }
 }
 

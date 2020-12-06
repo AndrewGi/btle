@@ -71,7 +71,9 @@ pub async fn dump_usb() -> Result<(), btle::hci::adapter::Error> {
     println!("using {:?}", device);
     let context = context.start_async();
     let adapter = context.make_async_device(device.open().map_err(usb::Error::from)?);
-    let adapter = usb::adapter::Adapter::open(adapter)?;
+    adapter.handle_ref().reset().map_err(usb::Error::from)?;
+    let mut adapter = usb::adapter::Adapter::open(adapter)?;
+    adapter.flush_event_buffer().await?;
     dump_adapter(adapter).await
 }
 pub async fn dump_adapter<A: btle::hci::adapter::Adapter>(

@@ -24,7 +24,7 @@ extern crate std;
 extern crate alloc;
 pub(crate) use futures_util::stream::Stream;
 /// Workaround for returning futures from async Traits.
-pub type BoxFuture<'a, T> = core::pin::Pin<Box<dyn core::future::Future<Output = T> + 'a>>;
+pub type LocalBoxFuture<'a, T> = core::pin::Pin<Box<dyn core::future::Future<Output = T> + 'a>>;
 /// Workaround for returning streams from async Traits.
 pub type BoxStream<'a, T> = core::pin::Pin<Box<dyn Stream<Item = T> + 'a>>;
 extern crate core;
@@ -38,7 +38,7 @@ pub mod hci;
 pub mod le;
 pub mod uri;
 pub mod uuid;
-#[cfg(feature = "winrt_drives")]
+#[cfg(feature = "winrt_drivers")]
 pub mod windows;
 
 use core::convert::{TryFrom, TryInto};

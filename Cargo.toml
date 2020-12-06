@@ -10,9 +10,9 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["hci",  "std"]
+default = ["hci", "std"]
 bluez_socket = ["nix", "libc", "std", "hci", "tokio/uds"]
-winrt_drivers = ["winrt", "std"]
+winrt_drivers = ["winrt", "winrt_bluetooth_bindings", "std", "tokio/sync"]
 hci = []
 classic = []
 hci_usb = ["hci", "usbw"]
@@ -21,13 +21,14 @@ std = []
 serde-1 = ["serde"]
 
 [dependencies]
-winrt = {version = "0.6.0", default_features = false, features = ["windows-devices", "windows-storage"], optional = true}
+winrt = {version = "0.7.2", default_features = false, optional = true}
+winrt_bluetooth_bindings = {version = "0.0.3", optional = true}
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2", optional = true}
 tokio = {version = "0.2", optional = true, default_features = false}
 #rusb = {version = "0.5.5", optional = true}
 usbw = {version = "0.0.2", optional = true, path = "../../usbw"}
-futures-util = {version = "0.3.4", default_features = false, features=["alloc"]}
+futures-util = {version = "0.3.8", default_features = false, features=["alloc"]}
 serde = {version = "1.0", default-features = false, features = ["derive"], optional = true }
 
 [[example]]
@@ -35,7 +36,7 @@ name = "advertisement_dump"
 
 [[example]]
 name = "windows_test"
-required-features = ["windows_drivers"]
+required-features = ["winrt_drivers"]
 
 [[example]]
 name = "usb_test"
