@@ -176,6 +176,16 @@ impl BTAddress {
         assert_eq!(bytes.len(), BT_ADDRESS_LEN, "address wrong length");
         BTAddress(bytes.try_into().expect("length checked by assert_eq above"))
     }
+    /// Uses the 6 lower bytes of `u` in Little Endian
+    pub fn from_u64(u: u64) -> Self {
+        let bytes = u.to_le_bytes();
+        BTAddress([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]])
+    }
+    pub fn to_u64(self) -> u64 {
+        u64::from_le_bytes([
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], 0, 0,
+        ])
+    }
     pub fn unpack_from(bytes: &[u8]) -> Result<Self, PackError> {
         PackError::expect_length(BT_ADDRESS_LEN, bytes)?;
         Ok(Self::new(bytes))
@@ -205,6 +215,41 @@ impl BTAddress {
             )),
             _ => None,
         }
+    }
+}
+impl core::fmt::Display for BTAddress {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
+        )
+    }
+}
+impl core::str::FromStr for BTAddress {
+    type Err = ConversionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut out = [0u8; 6];
+
+        let mut nth = 0;
+        // Split between ':' and '-'
+        // ex: `10-AB-23...` or `10:AB:23...`
+        for byte in s.split(|c| c == ':' || c == '-') {
+            if nth == 6 {
+                return Err(ConversionError(()));
+            }
+
+            out[nth] = u8::from_str_radix(byte, 16).map_err(|_| ConversionError(()))?;
+
+            nth += 1;
+        }
+
+        if nth != 6 {
+            return Err(ConversionError(()));
+        }
+
+        Ok(BTAddress(out))
     }
 }
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug, Hash)]

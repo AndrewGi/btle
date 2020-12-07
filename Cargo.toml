@@ -39,6 +39,10 @@ name = "windows_test"
 required-features = ["winrt_drivers"]
 
 [[example]]
+name = "windows_gatt_test"
+required-features = ["winrt_drivers"]
+
+[[example]]
 name = "usb_test"
 required-features = ["hci_usb"]
 

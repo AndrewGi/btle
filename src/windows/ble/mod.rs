@@ -1,2 +1,2 @@
+pub mod advertisements;
 pub mod gatt;
-pub mod observer;
