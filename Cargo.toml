@@ -22,7 +22,7 @@ serde-1 = ["serde"]
 
 [dependencies]
 winrt = {version = "0.7.2", default_features = false, optional = true}
-winrt_bluetooth_bindings = {version = "0.0.3", optional = true}
+winrt_bluetooth_bindings = {version = "0.0.4", optional = true}
 nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2", optional = true}
 tokio = {version = "0.2", optional = true, default_features = false}

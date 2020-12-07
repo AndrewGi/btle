@@ -1,5 +1,8 @@
 use crate::uuid::UUID;
-use crate::windows::{uuid_to_guid, WindowsError};
+use crate::windows::ble::gatt::characteristic::{
+    LocalCharacteristic, LocalCharacteristicParameters,
+};
+use crate::windows::{guid_to_uuid, uuid_to_guid, WindowsError};
 use winrt_bluetooth_bindings::windows::devices::bluetooth::generic_attribute_profile::{
     GattDeviceServicesResult, GattLocalService, GattServiceProvider,
     GattServiceProviderAdvertisementStatus,
@@ -39,7 +42,24 @@ impl ServiceProvider {
 }
 
 pub struct LocalService(GattLocalService);
-impl LocalService {}
+impl LocalService {
+    pub fn uuid(&self) -> Result<UUID, WindowsError> {
+        Ok(guid_to_uuid(&self.0.uuid()?))
+    }
+
+    pub async fn create_characteristic(
+        &self,
+        uuid: &UUID,
+        parameters: LocalCharacteristicParameters,
+    ) -> Result<LocalCharacteristic, WindowsError> {
+        Ok(LocalCharacteristic::from_inner(
+            self.0
+                .create_characteristic_async(uuid_to_guid(uuid), parameters.into_inner())?
+                .await?
+                .characteristic()?,
+        ))
+    }
+}
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Hash)]
 pub enum AdvertisementStatus {
     Created,

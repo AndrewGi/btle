@@ -1,2 +1,3 @@
+pub mod characteristic;
 pub mod device;
-pub mod services;
+pub mod service;

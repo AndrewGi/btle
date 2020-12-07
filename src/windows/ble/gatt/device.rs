@@ -1,4 +1,4 @@
-use crate::windows::ble::gatt::services::ServicesResult;
+use crate::windows::ble::gatt::service::ServicesResult;
 use crate::windows::WindowsError;
 use crate::BTAddress;
 use winrt_bluetooth_bindings::windows::devices::bluetooth::BluetoothLEDevice;
