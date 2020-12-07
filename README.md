@@ -24,8 +24,8 @@ Any platforms missings drivers should still be able to compile, just without any
 Supported GAP Roles so far:
 - [x] Observer (Receiver Advertisements)
 - [x] Broadcaster (Send Advertisements)
-- [x] (WIP) Central (Initiate GATT Connection)
-- [x] (WIP) Peripheral (GATT Connectable)
+- [ ] (WIP) Central (Initiate GATT Connection)
+- [ ] (WIP) Peripheral (GATT Connectable)
 
 WIP Example (API may change later):
 ```rust
