@@ -48,7 +48,8 @@ impl ScanInterval {
     pub fn new(interval: u16) -> ScanInterval {
         assert!(
             interval >= INTERVAL_MIN && interval <= INTERVAL_MAX,
-            "interval '{}' is out of range"
+            "interval '{}' is out of range",
+            interval
         );
         ScanInterval(interval)
     }
@@ -76,7 +77,9 @@ impl ScanWindow {
     pub fn new(window: u16) -> ScanWindow {
         assert!(
             window >= INTERVAL_MIN && window <= INTERVAL_MAX,
-            "window '{}' is out of range"
+            "window '{}' is out of range",
+            window
+
         );
         ScanWindow(window)
     }

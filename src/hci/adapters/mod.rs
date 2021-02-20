@@ -38,10 +38,10 @@ pub struct Adapter<A: adapter::Adapter, H: UnrecognizedEventHandler> {
 }
 impl<A: adapter::Adapter> Adapter<A, DummyUnrecognizedEventHandler<Box<[u8]>>> {
     pub fn new(adapter: A) -> Self {
-        Adapter {
+        Adapter::new_with_handler(
             adapter,
-            event_handler: DummyUnrecognizedEventHandler::new(),
-        }
+            DummyUnrecognizedEventHandler::new(),
+        )
     }
 }
 impl<A: adapter::Adapter, H: UnrecognizedEventHandler> Adapter<A, H> {
@@ -91,6 +91,8 @@ impl<A: adapter::Adapter, H: UnrecognizedEventHandler> Adapter<A, H> {
         Ok(())
     }
 }
+
+
 /*
 use crate::hci::{
     adapter::Error,

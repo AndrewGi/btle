@@ -27,7 +27,7 @@ nix = {version = "0.16.1", optional = true}
 libc = {version = "0.2", optional = true}
 tokio = {version = "0.2", optional = true, default_features = false}
 #rusb = {version = "0.5.5", optional = true}
-usbw = {version = "0.0.2", optional = true, path = "../../usbw"}
+usbw = {version = "0.0.2", optional = true, path = "../usbw"}
 futures-util = {version = "0.3.8", default_features = false, features=["alloc"]}
 serde = {version = "1.0", default-features = false, features = ["derive"], optional = true }
 
