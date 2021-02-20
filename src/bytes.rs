@@ -346,7 +346,7 @@ impl<T: Copy + Unpin + Default> Storage<T> for Vec<T> {
         <Vec<T>>::len(self)
     }
     fn max_len() -> usize {
-        usize::max_value()
+        usize::MAX
     }
 }
 impl<T: Copy + Unpin + Default> Storage<T> for Box<[T]> {
@@ -364,7 +364,7 @@ impl<T: Copy + Unpin + Default> Storage<T> for Box<[T]> {
     }
 
     fn max_len() -> usize {
-        usize::max_value()
+        usize::MAX
     }
 }
 
