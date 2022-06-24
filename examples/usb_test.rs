@@ -42,7 +42,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     let adapter = usb::adapter::Adapter::open(handle)?;
     println!(
         "got adapter! '{:?}' {}",
-        adapter.get_product_string(),
+        adapter.get_product_string().await,
         adapter.device_identifier()
     );
     let mut adapter = Adapter::new(adapter);
