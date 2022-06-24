@@ -32,6 +32,8 @@ pub mod bytes;
 pub mod channel;
 #[cfg(feature = "classic")]
 pub mod classic;
+#[cfg(feature = "bluez_dbus")]
+pub mod dbus;
 pub mod error;
 #[cfg(feature = "hci")]
 pub mod hci;
@@ -56,7 +58,7 @@ impl PackError {
     /// Ensure `buf.len() == expected`. Returns `Ok(())` if they are equal or
     /// `Err(HCIPackError::BadLength)` not equal.
     #[inline]
-    pub fn expect_length(expected: usize, buf: &[u8]) -> Result<(), PackError> {
+    pub const fn expect_length(expected: usize, buf: &[u8]) -> Result<(), PackError> {
         if buf.len() == expected {
             Ok(())
         } else {

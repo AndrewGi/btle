@@ -4,6 +4,7 @@ use winrt_bluetooth_bindings::windows::devices::bluetooth::generic_attribute_pro
 };
 use winrt_bluetooth_bindings::windows::foundation::collections::IVectorView;
 use winrt_bluetooth_bindings::windows::storage::streams::{DataReader, DataWriter};
+
 pub struct LocalCharacteristics(IVectorView<GattLocalCharacteristic>);
 impl LocalCharacteristics {
     pub fn size(&self) -> Result<usize, WindowsError> {
