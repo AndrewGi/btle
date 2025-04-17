@@ -2,7 +2,7 @@ use btle::windows;
 use futures_util::StreamExt;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runtime = tokio::runtime::Builder::new()
+    let mut runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("can't make async runtime");

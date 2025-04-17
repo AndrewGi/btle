@@ -7,7 +7,7 @@ use btle::le::advertiser::AdvertisingInterval;
 use core::convert::{TryFrom, TryInto};
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runtime = tokio::runtime::Builder::new()
+    let mut runtime = tokio::runtime::Runtime::new()
         .enable_all()
         .build()
         .expect("can't make async runtime");

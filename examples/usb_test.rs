@@ -6,7 +6,7 @@ use btle::le::scan::ScanParameters;
 use futures_util::StreamExt;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runtime = tokio::runtime::Builder::new()
+    let mut runtime = tokio::runtime::Runetime::new()
         .enable_all()
         .build()
         .expect("can't make async runtime");

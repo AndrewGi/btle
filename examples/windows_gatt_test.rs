@@ -2,7 +2,7 @@ use btle::uuid::UUID;
 use btle::{windows::ble::gatt, BTAddress};
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runtime = tokio::runtime::Builder::new()
+    let mut runtime = tokio::runtime::Runetime::new()
         .enable_all()
         .build()
         .expect("can't make async runtime");
