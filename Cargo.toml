@@ -11,7 +11,7 @@ repository = "https://github.com/AndrewGi/btle/tree/master"
 
 [features]
 default = ["hci", "std"]
-bluez_socket = ["nix", "libc", "std", "hci", "tokio/uds"]
+bluez_socket = ["nix", "libc", "std", "hci", "tokio/net"]
 winrt_drivers = ["winrt", "winrt_bluetooth_bindings", "std", "tokio/sync"]
 hci = []
 classic = []
@@ -47,4 +47,4 @@ name = "usb_test"
 required-features = ["hci_usb"]
 
 [dev-dependencies]
-tokio = "0.2"
+tokio = "1.44"
