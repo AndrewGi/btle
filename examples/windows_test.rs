@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use btle::le::scan::Observer;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runtime = tokio::runtime::Runtime::new()
+    let runtime = tokio::runtime::Runtime::new()
         .expect("can't make async runtime");
     runtime.block_on(main_async())
 }
