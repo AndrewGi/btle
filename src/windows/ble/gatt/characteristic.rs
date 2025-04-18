@@ -1,10 +1,12 @@
 use crate::windows::WindowsError;
-use winrt_bluetooth_bindings::windows::devices::bluetooth::generic_attribute_profile::{
-    GattCharacteristicProperties, GattLocalCharacteristic, GattLocalCharacteristicParameters,
+use windows::{
+    Storage::Streams::{DataReader, DataWriter},
+    Devices::Bluetooth::GenericAttributeProfile::{
+        GattCharacteristicProperties, GattLocalCharacteristic, GattLocalCharacteristicParameters,
+    }
 };
-use winrt_bluetooth_bindings::windows::foundation::collections::IVectorView;
-use winrt_bluetooth_bindings::windows::storage::streams::{DataReader, DataWriter};
 
+/*
 pub struct LocalCharacteristics(IVectorView<GattLocalCharacteristic>);
 impl LocalCharacteristics {
     pub fn size(&self) -> Result<usize, WindowsError> {
@@ -50,6 +52,7 @@ impl<'a> Iterator for LocalCharacteristicsIter<'a> {
         }
     }
 }
+    */
 pub struct LocalCharacteristic(GattLocalCharacteristic);
 impl LocalCharacteristic {
     pub fn from_inner(inner: GattLocalCharacteristic) -> Self {
@@ -69,25 +72,25 @@ impl LocalCharacteristicParameters {
         self.0
     }
     pub fn static_value(&self) -> Result<Vec<u8>, WindowsError> {
-        let buf = self.0.static_value()?;
-        let reader = DataReader::from_buffer(buf)?;
-        let len = reader.unconsumed_buffer_length()? as usize;
+        let buf = self.0.StaticValue()?;
+        let reader = DataReader::FromBuffer(&buf)?;
+        let len = reader.UnconsumedBufferLength()? as usize;
         let mut out = vec![0_u8; len];
-        reader.read_bytes(out.as_mut_slice())?;
+        reader.ReadBytes(out.as_mut_slice())?;
         Ok(out)
     }
     pub fn set_static_value(&self, value: &[u8]) -> Result<(), WindowsError> {
         let writer = DataWriter::new()?;
-        writer.write_bytes(value)?;
-        self.0.set_static_value(writer.detach_buffer()?)?;
+        writer.WriteBytes(value)?;
+        self.0.SetStaticValue(&writer.DetachBuffer()?)?;
         Ok(())
     }
     pub fn user_description(&self) -> Result<String, WindowsError> {
-        Ok(self.0.user_description()?.into())
+        Ok(self.0.UserDescription()?.to_string_lossy())
     }
     pub fn set_user_description(&self, description: &str) -> Result<(), WindowsError> {
         self.0
-            .set_user_description(winrt::HString::from(description))?;
+            .SetUserDescription(&windows::core::HSTRING::from(description))?;
         Ok(())
     }
 }

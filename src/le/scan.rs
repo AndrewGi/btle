@@ -174,22 +174,23 @@ pub enum ObserverError {
 }
 impl crate::error::Error for ObserverError {}
 pub trait Observer {
+    type Error;
     fn set_scan_parameters<'a>(
         &'a mut self,
         scan_parameters: ScanParameters,
-    ) -> LocalBoxFuture<'a, Result<(), adapter::Error>>;
+    ) -> LocalBoxFuture<'a, Result<(), Self::Error>>;
     fn set_scan_enable<'a>(
         &'a mut self,
         is_enabled: bool,
         filter_duplicates: bool,
-    ) -> LocalBoxFuture<'a, Result<(), adapter::Error>>;
+    ) -> LocalBoxFuture<'a, Result<(), Self::Error>>;
     fn advertisement_stream<'a>(
         &'a mut self,
     ) -> LocalBoxFuture<
         'a,
         Result<
-            LocalBoxStream<'a, Result<ReportInfo<StaticAdvBuffer>, adapter::Error>>,
-            adapter::Error,
+            LocalBoxStream<'a, Result<ReportInfo<StaticAdvBuffer>, Self::Error>>,
+            Self::Error,
         >,
     >;
     /// Optimize `advertisement_stream` by avoiding setting HCI event masks. Defaults to calling
@@ -202,8 +203,8 @@ pub trait Observer {
     ) -> LocalBoxFuture<
         'a,
         Result<
-            LocalBoxStream<'a, Result<ReportInfo<StaticAdvBuffer>, adapter::Error>>,
-            adapter::Error,
+            LocalBoxStream<'a, Result<ReportInfo<StaticAdvBuffer>, Self::Error>>,
+            Self::Error,
         >,
     > {
         self.advertisement_stream()

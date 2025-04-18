@@ -16,16 +16,19 @@ use futures_util::stream::Stream;
 use std::marker::PhantomData;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
-use winrt_bluetooth_bindings::windows::{
-    devices::bluetooth::advertisement::{
+use windows::Devices::Bluetooth::Advertisement::{
         BluetoothLEAdvertisementDataSection, BluetoothLEAdvertisementFilter,
         BluetoothLEAdvertisementReceivedEventArgs, BluetoothLEAdvertisementType,
         BluetoothLEAdvertisementWatcher, BluetoothLEScanningMode,
-    },
-    foundation,
-    storage::streams::DataReader,
+    };
+use windows::{
+    Foundation,
+    Storage::Streams::DataReader,
 };
-pub trait RawWatcherCallback: 'static {
+use futures_util::future::LocalBoxFuture;
+use futures_util::stream::{LocalBoxStream, StreamExt};
+
+pub trait RawWatcherCallback: Send + 'static {
     fn callback(
         &mut self,
         args: &BluetoothLEAdvertisementReceivedEventArgs,
@@ -33,7 +36,7 @@ pub trait RawWatcherCallback: 'static {
 }
 impl<T> RawWatcherCallback for T
 where
-    T: FnMut(&BluetoothLEAdvertisementReceivedEventArgs) -> Result<(), WindowsError> + 'static,
+    T: FnMut(&BluetoothLEAdvertisementReceivedEventArgs)-> Result<(), WindowsError> + Send + 'static,
 {
     fn callback(
         &mut self,
@@ -50,10 +53,16 @@ pub struct RawWatcher<Callback> {
 impl<Callback: RawWatcherCallback> RawWatcher<Callback> {
     pub fn new(mut callback: Callback) -> Result<Self, WindowsError> {
         let filter = BluetoothLEAdvertisementFilter::new()?;
-        let watcher = BluetoothLEAdvertisementWatcher::create(&filter)?;
-        watcher.received(&foundation::TypedEventHandler::new(
-            move |_sender, args: &BluetoothLEAdvertisementReceivedEventArgs| {
-                callback.callback(args).map_err(|e| e.0)
+        let watcher = BluetoothLEAdvertisementWatcher::Create(&filter)?;
+        watcher.Received(&Foundation::TypedEventHandler::new(
+            move |_sender, args: windows::core::Ref<BluetoothLEAdvertisementReceivedEventArgs>| {
+                if let Some(args) = args.as_ref() {
+                    return callback.callback(args).map_err(|e| e.0)
+                }
+                Err(windows::core::Error::new(
+                    windows::core::HRESULT(0x4F9),
+                    "callback failed",
+                ))
             },
         ))?;
         Ok(RawWatcher {
@@ -64,9 +73,9 @@ impl<Callback: RawWatcherCallback> RawWatcher<Callback> {
 
     pub fn set_scan_enable(&mut self, is_enabled: bool) -> Result<(), WindowsError> {
         if is_enabled {
-            self.watcher.start()?;
+            self.watcher.Start()?;
         } else {
-            self.watcher.stop()?;
+            self.watcher.Stop()?;
         }
         Ok(())
     }
@@ -75,7 +84,7 @@ impl<Callback: RawWatcherCallback> RawWatcher<Callback> {
             ScanType::Passive => BluetoothLEScanningMode::Passive,
             ScanType::Active => BluetoothLEScanningMode::Active,
         };
-        self.watcher.set_scanning_mode(mode)?;
+        self.watcher.SetScanningMode(mode)?;
         Ok(())
     }
 }
@@ -89,11 +98,11 @@ impl ReportInfoCallback {
     fn data_section_to_raw_ad_struct(
         data_sec: &BluetoothLEAdvertisementDataSection,
     ) -> Result<RawAdStructureBuffer, WindowsError> {
-        let ad_type = AdType::try_from(data_sec.data_type()?).expect("bad advertisement part");
-        let reader = DataReader::from_buffer(&data_sec.data()?)?;
-        let len: u32 = reader.unconsumed_buffer_length()?;
+        let ad_type = AdType::try_from(data_sec.DataType()?).expect("bad advertisement part");
+        let reader = DataReader::FromBuffer(&data_sec.Data()?)?;
+        let len: u32 = reader.UnconsumedBufferLength()?;
         let mut buf = StaticAdvStructBuf::with_size(len as usize);
-        reader.read_bytes(buf.as_mut())?;
+        reader.ReadBytes(buf.as_mut())?;
         Ok(RawAdStructureBuffer::new(ad_type, buf))
     }
     fn advertisement_type_to_event_type(t: BluetoothLEAdvertisementType) -> EventType {
@@ -117,8 +126,8 @@ impl ReportInfoCallback {
             Ok(_) => Ok(()),
             Err(e) => match e {
                 TrySendError::Full(_) => Ok(()),
-                TrySendError::Closed(_) => Err(winrt::Error::new(
-                    winrt::ErrorCode(0x77370002),
+                TrySendError::Closed(_) => Err(windows::core::Error::new(
+                    windows::core::HRESULT(0x77370002),
                     "le watcher receiver closed",
                 )
                 .into()),
@@ -130,24 +139,23 @@ impl ReportInfoCallback {
         args: &BluetoothLEAdvertisementReceivedEventArgs,
     ) -> Result<ReportInfo, WindowsError> {
         Ok(ReportInfo {
-            event_type: Self::advertisement_type_to_event_type(args.advertisement_type()?),
+            event_type: Self::advertisement_type_to_event_type(args.AdvertisementType()?),
             address_type: AddressType::PublicDevice,
-            address: BTAddress::from_u64(args.bluetooth_address()?),
+            address: BTAddress::from_u64(args.BluetoothAddress()?),
             data: {
                 let mut out = RawAdvertisement::default();
-                for data_sec in args.advertisement()?.data_sections()?.into_iter() {
+                for data_sec in args.Advertisement()?.DataSections()?.into_iter() {
                     out.insert(&Self::data_section_to_raw_ad_struct(&data_sec)?)
                         .map_err(|_| {
-                            winrt::Error::new(
-                                winrt::ErrorCode(0x77370001),
-                                "unable to convert data section to raw ad struct",
+                            windows::core::Error::new(windows::core::HRESULT(0x77370001),
+                            "unable to convert data section to raw ad struct",
                             )
                         })?;
                 }
                 out
             },
             rssi: Some(RSSI::new(
-                args.raw_signal_strength_in_dbm()?
+                args.RawSignalStrengthInDBm()?
                     .try_into()
                     .expect("invalid rssi"),
             )),
@@ -193,5 +201,33 @@ impl<'a> Stream for AdvertisementStream<'a> {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Pin::new(&mut self.0.rx).poll_recv(cx)
+    }
+}
+
+impl crate::le::scan::Observer for ReportInfoWatcher {
+    type Error = WindowsError;
+    fn set_scan_enable<'a>(&'a mut self, is_enabled: bool, _filter_duplicates: bool) -> LocalBoxFuture<'a, Result<(), Self::Error>> {
+        Box::pin(async move {
+            self.watcher.set_scan_enable(is_enabled)
+        })
+    }
+    fn set_scan_parameters<'a>(
+        &'a mut self,
+        scan_parameters: scan::ScanParameters,
+    ) -> LocalBoxFuture<'a, Result<(), Self::Error>> {
+        Box::pin(async move {
+            self.watcher.set_scanning_mode(scan_parameters.scan_type)
+        })
+    }
+    fn advertisement_stream<'a>(
+        &'a mut self,
+    ) -> LocalBoxFuture<
+            'a,
+            Result<
+                LocalBoxStream<'a, Result<ReportInfo, WindowsError>>,
+                Self::Error,
+            >,
+        > {
+        Box::pin(async move { Ok(Box::pin(self.advertisement_stream().map(|x| Ok(x))) as Pin<Box<dyn Stream<Item=Result<ReportInfo, WindowsError>>>>) })
     }
 }

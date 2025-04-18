@@ -288,6 +288,7 @@ impl<A: adapter::Adapter, H: UnrecognizedEventHandler> Advertiser for LEAdapter<
 }
 
 impl<A: adapter::Adapter, H: UnrecognizedEventHandler> Observer for LEAdapter<A, H> {
+    type Error = adapter::Error;
     fn set_scan_parameters<'a>(
         &'a mut self,
         scan_parameters: ScanParameters,

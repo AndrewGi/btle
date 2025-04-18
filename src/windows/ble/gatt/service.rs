@@ -3,10 +3,12 @@ use crate::windows::ble::gatt::characteristic::{
     LocalCharacteristic, LocalCharacteristicParameters,
 };
 use crate::windows::{guid_to_uuid, uuid_to_guid, BluetoothError, WindowsError};
-use winrt_bluetooth_bindings::windows::devices::bluetooth::generic_attribute_profile::{
+use windows::Devices::Bluetooth::GenericAttributeProfile::{
     GattDeviceServicesResult, GattLocalService, GattServiceProvider,
     GattServiceProviderAdvertisementStatus,
 };
+use core::future::IntoFuture;
+//use windows_future::IAsyncOperation;
 
 pub struct ServicesResult(GattDeviceServicesResult);
 impl ServicesResult {
@@ -14,7 +16,7 @@ impl ServicesResult {
         Self(inner)
     }
     pub fn protocol_error(&self) -> Result<u8, WindowsError> {
-        Ok(self.0.protocol_error()?.value()?)
+        Ok(self.0.ProtocolError()?.Value()?)
     }
 }
 
@@ -22,29 +24,29 @@ pub struct ServiceProvider(GattServiceProvider);
 impl ServiceProvider {
     pub async fn new(uuid: &UUID) -> Result<Self, WindowsError> {
         Ok(Self(
-            GattServiceProvider::create_async(uuid_to_guid(uuid))?
+            GattServiceProvider::CreateAsync(uuid_to_guid(uuid))?.into_future()
                 .await?
-                .service_provider()?,
+                .ServiceProvider()?,
         ))
     }
     pub fn start_advertising(&self) -> Result<(), WindowsError> {
-        Ok(self.0.start_advertising()?)
+        Ok(self.0.StartAdvertising()?)
     }
     pub fn stop_advertising(&self) -> Result<(), WindowsError> {
-        Ok(self.0.stop_advertising()?)
+        Ok(self.0.StopAdvertising()?)
     }
     pub fn service(&self) -> Result<LocalService, WindowsError> {
-        Ok(LocalService(self.0.service()?))
+        Ok(LocalService(self.0.Service()?))
     }
     pub fn advertisement_status(&self) -> Result<AdvertisementStatus, WindowsError> {
-        Ok(self.0.advertisement_status()?.into())
+        Ok(self.0.AdvertisementStatus()?.into())
     }
 }
 
 pub struct LocalService(GattLocalService);
 impl LocalService {
     pub fn uuid(&self) -> Result<UUID, WindowsError> {
-        Ok(guid_to_uuid(&self.0.uuid()?))
+        Ok(guid_to_uuid(&self.0.Uuid()?))
     }
 
     pub async fn create_characteristic(
@@ -52,16 +54,17 @@ impl LocalService {
         uuid: &UUID,
         parameters: LocalCharacteristicParameters,
     ) -> Result<Result<LocalCharacteristic, BluetoothError>, WindowsError> {
+
         let result = self
             .0
-            .create_characteristic_async(uuid_to_guid(uuid), parameters.into_inner())?
+            .CreateCharacteristicAsync(uuid_to_guid(uuid), &parameters.into_inner())?
             .await?;
-        match BluetoothError::from(result.error()?) {
+        match BluetoothError::from(result.Error()?) {
             BluetoothError::Success => (),
             e => return Ok(Err(e)),
         };
         Ok(Ok(LocalCharacteristic::from_inner(
-            result.characteristic()?,
+            result.Characteristic()?,
         )))
     }
 }
